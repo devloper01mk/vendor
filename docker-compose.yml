@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: naman-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vendor_expense
+    ports:
+      - "5432:5432"
+    volumes:
+      - naman_pg_data:/var/lib/postgresql/data
+
+volumes:
+  naman_pg_data:

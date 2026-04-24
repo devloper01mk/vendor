@@ -1,0 +1,11 @@
+node_modules
+build
+**/build/
+dist
+.next
+.expo
+.env
+.env.local
+storage/public/invoices/*
+!storage/public/invoices/.gitkeep
+.DS_Store

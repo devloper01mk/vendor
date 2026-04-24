@@ -1,0 +1,172 @@
+// Vendor & Site Expense Management — PostgreSQL schema
+// Apply DB: prisma/install.sql (psql) then prisma generate
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNT_HEAD
+  MEMBER
+}
+
+enum RequirementStatus {
+  PENDING
+  COMPLETED
+}
+
+/// Work requirement / expense line item (replaces a sheet row).
+model Requirement {
+  id              String              @id @default(uuid())
+  itemName        String              @map("item_name")
+  brand           String?
+  quantity        Decimal             @default(1) @db.Decimal(18, 4)
+  totalAmount     Decimal             @map("total_amount") @db.Decimal(18, 2)
+  status          RequirementStatus   @default(PENDING)
+  billReceived    Boolean             @default(false) @map("bill_received")
+  entryDate       DateTime            @map("entry_date") @db.Date
+  notes           String?
+  isFlagged       Boolean             @default(false) @map("is_flagged")
+  flagReason      String?             @map("flag_reason")
+  flaggedAt       DateTime?           @map("flagged_at")
+  flaggedById     String?             @map("flagged_by_id")
+  flaggedBy       User?               @relation("RequirementFlaggedBy", fields: [flaggedById], references: [id])
+
+  vendorId        String              @map("vendor_id")
+  vendor          Vendor              @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  siteId          String              @map("site_id")
+  site            Site                @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  createdById     String              @map("created_by_id")
+  createdBy       User                @relation("RequirementCreatedBy", fields: [createdById], references: [id])
+
+  payments        Payment[]
+  invoice         Invoice?
+  updateLogs      RequirementUpdateLog[]
+
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  @@index([vendorId])
+  @@index([siteId])
+  @@index([entryDate])
+  @@index([createdById])
+  @@index([isFlagged])
+  @@map("requirements")
+}
+
+model RequirementUpdateLog {
+  id             String   @id @default(uuid())
+  requirementId  String   @map("requirement_id")
+  requirement    Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  changedById    String   @map("changed_by_id")
+  changedBy      User     @relation("RequirementLogChangedBy", fields: [changedById], references: [id])
+  previousData   Json     @map("previous_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([requirementId, createdAt])
+  @@map("requirement_update_logs")
+}
+
+model Payment {
+  id             String       @id @default(uuid())
+  amount         Decimal      @db.Decimal(18, 2)
+  paidAt         DateTime     @default(now()) @map("paid_at")
+  method         String?
+  note           String?
+
+  requirementId  String       @map("requirement_id")
+  requirement    Requirement  @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  recordedById   String       @map("recorded_by_id")
+  recordedBy     User         @relation(fields: [recordedById], references: [id])
+
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([requirementId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+/// One invoice / bill attachment per requirement (GST metadata stored as JSON for flexibility).
+model Invoice {
+  id              String       @id @default(uuid())
+  fileUrl         String       @map("file_url")
+  fileKey         String       @map("file_key")
+  mimeType        String       @map("mime_type")
+  originalName    String       @map("original_name")
+  gstDetails      Json?        @map("gst_details")
+
+  requirementId   String       @unique @map("requirement_id")
+  requirement     Requirement  @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  uploadedById    String       @map("uploaded_by_id")
+  uploadedBy      User         @relation(fields: [uploadedById], references: [id])
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@map("invoices")
+}
+
+model Vendor {
+  id          String   @id @default(uuid())
+  name        String
+  gstNumber   String?  @map("gst_number")
+  phone       String?
+  alternatePhone String? @map("alternate_phone")
+  email       String?
+  address     String?
+
+  requirements Requirement[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("vendors")
+}
+
+model Site {
+  id        String   @id @default(uuid())
+  name      String
+  code      String?  @unique
+  address   String?
+
+  requirements Requirement[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sites")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  /// Null when the user is Google-only (must sign in with Google).
+  passwordHash String?   @map("password_hash")
+  /// Google "sub" from OAuth / ID token — stable account id.
+  googleId     String?   @unique @map("google_id")
+  name         String
+  role         UserRole  @default(MEMBER)
+  isBlocked    Boolean   @default(false) @map("is_blocked")
+
+  requirementsCreated Requirement[] @relation("RequirementCreatedBy")
+  requirementsFlagged Requirement[] @relation("RequirementFlaggedBy")
+  requirementUpdateLogs RequirementUpdateLog[] @relation("RequirementLogChangedBy")
+  paymentsRecorded    Payment[]
+  invoicesUploaded    Invoice[]
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}

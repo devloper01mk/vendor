@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+.env.local
+storage/public/invoices/*
+!storage/public/invoices/.gitkeep

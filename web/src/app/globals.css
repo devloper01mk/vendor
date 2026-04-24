@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: 220 17% 14%;
+  --muted: 220 9% 42%;
+  --canvas: 40 18% 98%;
+  --line: 220 14% 89%;
+  --panel: 0 0% 100%;
+  --panel-muted: 220 22% 96%;
+  --positive: 150 45% 36%;
+  --positive-soft: 150 40% 95%;
+  --negative: 3 58% 46%;
+  --negative-soft: 3 80% 96%;
+  --focus: 214 72% 52%;
+}
+
+.dark {
+  --ink: 210 15% 92%;
+  --muted: 215 12% 64%;
+  --canvas: 220 14% 8%;
+  --line: 220 12% 18%;
+  --panel: 220 16% 11%;
+  --panel-muted: 220 16% 14%;
+  --positive: 150 41% 58%;
+  --positive-soft: 150 24% 18%;
+  --negative: 4 76% 70%;
+  --negative-soft: 3 34% 20%;
+  --focus: 214 88% 72%;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+}
+
+* {
+  border-color: hsl(var(--line) / 1);
+}
+
+@layer components {
+  .surface {
+    @apply rounded-2xl border bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03),0_10px_24px_rgba(0,0,0,0.02)];
+  }
+
+  .subtle-surface {
+    @apply rounded-xl border bg-panel-muted;
+  }
+
+  .label {
+    @apply text-xs font-medium uppercase tracking-wide text-muted;
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border bg-panel px-3 py-2.5 text-sm outline-none transition focus:border-[hsl(var(--focus))] focus:ring-2 focus:ring-[hsl(var(--focus)/0.18)];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus)/0.22)];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border bg-panel px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-panel-muted;
+  }
+
+  .tone-positive {
+    color: hsl(var(--positive));
+  }
+
+  .tone-negative {
+    color: hsl(var(--negative));
+  }
+}
