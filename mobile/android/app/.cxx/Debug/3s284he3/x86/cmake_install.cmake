@@ -47,6 +47,7 @@ if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rnasyncstorage_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/cmake_install.cmake")
+  include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/safeareacontext_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rnscreens_autolinked_build/cmake_install.cmake")
 

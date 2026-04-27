@@ -3,31 +3,31 @@
 @tailwind utilities;
 
 :root {
-  --ink: 220 17% 14%;
-  --muted: 220 9% 42%;
-  --canvas: 40 18% 98%;
-  --line: 220 14% 89%;
+  --ink: 0 0% 16%;
+  --muted: 34 10% 44%;
+  --canvas: 35 26% 95%;
+  --line: 37 30% 86%;
   --panel: 0 0% 100%;
-  --panel-muted: 220 22% 96%;
-  --positive: 150 45% 36%;
-  --positive-soft: 150 40% 95%;
-  --negative: 3 58% 46%;
-  --negative-soft: 3 80% 96%;
-  --focus: 214 72% 52%;
+  --panel-muted: 36 33% 97%;
+  --positive: 34 23% 44%;
+  --positive-soft: 36 32% 95%;
+  --negative: 34 12% 38%;
+  --negative-soft: 34 25% 94%;
+  --focus: 38 29% 68%;
 }
 
 .dark {
-  --ink: 210 15% 92%;
-  --muted: 215 12% 64%;
-  --canvas: 220 14% 8%;
-  --line: 220 12% 18%;
-  --panel: 220 16% 11%;
-  --panel-muted: 220 16% 14%;
-  --positive: 150 41% 58%;
-  --positive-soft: 150 24% 18%;
-  --negative: 4 76% 70%;
-  --negative-soft: 3 34% 20%;
-  --focus: 214 88% 72%;
+  --ink: 39 29% 91%;
+  --muted: 35 14% 68%;
+  --canvas: 0 0% 8%;
+  --line: 0 0% 17%;
+  --panel: 0 0% 10%;
+  --panel-muted: 0 0% 12%;
+  --positive: 38 28% 72%;
+  --positive-soft: 0 0% 14%;
+  --negative: 36 22% 74%;
+  --negative-soft: 0 0% 15%;
+  --focus: 38 29% 68%;
 }
 
 body {
@@ -40,7 +40,7 @@ body {
 
 @layer components {
   .surface {
-    @apply rounded-2xl border bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03),0_10px_24px_rgba(0,0,0,0.02)];
+    @apply rounded-3xl border bg-panel shadow-[0_1px_2px_rgba(21,21,21,0.04),0_6px_18px_rgba(21,21,21,0.04)];
   }
 
   .subtle-surface {
@@ -52,22 +52,86 @@ body {
   }
 
   .input-base {
-    @apply w-full rounded-xl border bg-panel px-3 py-2.5 text-sm outline-none transition focus:border-[hsl(var(--focus))] focus:ring-2 focus:ring-[hsl(var(--focus)/0.18)];
+    @apply w-full rounded-2xl border bg-panel px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-[#9A9083] focus:border-[hsl(var(--focus))] focus:ring-2 focus:ring-[hsl(var(--focus)/0.2)];
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus)/0.22)];
+    @apply inline-flex items-center justify-center rounded-2xl bg-[hsl(var(--focus))] px-4 py-2.5 text-sm font-medium text-ink transition hover:brightness-95 active:opacity-90 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--focus)/0.25)];
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border bg-panel px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-panel-muted;
+    @apply inline-flex items-center justify-center rounded-2xl border bg-panel px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-panel-muted active:opacity-90;
   }
 
   .tone-positive {
-    color: hsl(var(--positive));
+    color: #1f8a4d;
+    font-weight: 600;
   }
 
   .tone-negative {
-    color: hsl(var(--negative));
+    color: #c93b3b;
+    font-weight: 600;
   }
+}
+
+/* DayPicker theme aligned with creamy admin UI */
+.rdp-root {
+  --rdp-accent-color: hsl(var(--focus));
+  --rdp-accent-background-color: #efe6d8;
+  --rdp-day_button-border-radius: 0.65rem;
+  --rdp-selected-border: 1px solid #cfbfa3;
+  --rdp-range_middle-background-color: #f3ece1;
+  --rdp-range_middle-color: #2a2a2a;
+  --rdp-range_start-background: #c8b693;
+  --rdp-range_end-background: #c8b693;
+  --rdp-range_start-color: #2a2a2a;
+  --rdp-range_end-color: #2a2a2a;
+}
+
+.rdp {
+  margin: 0;
+}
+
+.rdp-months {
+  gap: 1.5rem;
+}
+
+.rdp-month_caption {
+  color: #2a2a2a;
+  font-weight: 600;
+}
+
+.rdp-weekday {
+  color: #857b6e;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.rdp-day_button {
+  color: #2a2a2a;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+}
+
+.rdp-day_button:hover {
+  background: #f3ece1;
+  border-color: #e5ded3;
+}
+
+.rdp-today .rdp-day_button {
+  border-color: #d6c9b3;
+  font-weight: 700;
+}
+
+.rdp-button_previous,
+.rdp-button_next {
+  border-radius: 0.65rem;
+  border: 1px solid #e5ded3;
+  background: #fff;
+  color: #5b5245;
+}
+
+.rdp-button_previous:hover,
+.rdp-button_next:hover {
+  background: #f8f5ef;
 }

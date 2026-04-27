@@ -41,7 +41,7 @@ export const PrimaryButton = React.memo(function PrimaryButton({
 const styles = StyleSheet.create({
   btn: {
     marginTop: tokens.space[1],
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.lg,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
@@ -49,12 +49,13 @@ const styles = StyleSheet.create({
   },
   solid: {
     backgroundColor: tokens.color.accent,
-    ...tokens.shadow.card,
+    borderWidth: 1,
+    borderColor: "#BFAC88",
   },
   outline: {
     backgroundColor: tokens.color.panel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: tokens.color.borderStrong,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
   },
   pressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
   btnDisabled: { opacity: 0.5 },

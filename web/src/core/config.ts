@@ -11,7 +11,7 @@ export function getApiBaseUrl(): string {
   }
   return process.env.NEXT_PUBLIC_API_URL?.startsWith("http")
     ? process.env.NEXT_PUBLIC_API_URL!.replace(/\/$/, "")
-    : "http://127.0.0.1:4000";
+    : "https://api.reckon.cronberry.com";
 }
 
 /** Public backend origin for Google OAuth redirects (cannot go through Next proxy). */
@@ -20,5 +20,5 @@ export function getBackendPublicUrl(): string {
   if (b) return b;
   const p = process.env.NEXT_PUBLIC_API_URL;
   if (p?.startsWith("http")) return p.replace(/\/$/, "");
-  return "http://127.0.0.1:4000";
+  return "https://api.reckon.cronberry.com";
 }

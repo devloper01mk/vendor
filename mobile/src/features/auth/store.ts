@@ -8,6 +8,7 @@ type State = {
   token: string | null;
   user: AuthUser | null;
   setAuth: (token: string, user: AuthUser) => void;
+  setUser: (user: AuthUser) => void;
   logout: () => void;
 };
 
@@ -17,6 +18,7 @@ export const useAuthStore = create<State>()(
       token: null,
       user: null,
       setAuth: (token, user) => set({ token, user }),
+      setUser: (user) => set((s) => ({ ...s, user })),
       logout: () => set({ token: null, user: null }),
     }),
     {

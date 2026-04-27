@@ -3,8 +3,9 @@ import { InsightBars, type InsightBarDatum } from "@/components/ui/InsightBars";
 import { ListItem } from "@/components/ui/ListItem";
 import { createApi } from "@/data/api/client";
 import { useAuthStore } from "@/features/auth/store";
+import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from "react-native";
@@ -51,6 +52,7 @@ function getRangeQuery(filter: RangeFilter, customFrom: string, customTo: string
 
 export function AnalyticsScreen() {
   const token = useAuthStore((s) => s.token);
+  const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,20 @@ export function AnalyticsScreen() {
       displayValue: s.paid,
     }));
   }, [data]);
+  const quickStats = useMemo(
+    () => [
+      { key: "users", label: "Items", value: String(data?.highlighted?.length ?? 0), icon: "◌" },
+      { key: "vendors", label: "Sites", value: String(data?.siteSpend?.length ?? 0), icon: "⌂" },
+      { key: "tx", label: "Pending", value: data?.totals.pending ?? "0", icon: "▤" },
+      { key: "spend", label: "Committed", value: data?.totals.committed ?? "0", icon: "◎" },
+    ],
+    [data],
+  );
+  const paidN = Number(data?.totals.paid ?? 0);
+  const committedN = Number(data?.totals.committed ?? 0);
+  const pendingN = Number(data?.totals.pending ?? 0);
+  const paidPct = committedN > 0 ? Math.min(99.9, (paidN / committedN) * 100) : 0;
+  const pendingPct = committedN > 0 ? Math.min(99.9, (pendingN / committedN) * 100) : 0;
   const rangeLabel =
     rangeFilter === "ALL"
       ? "All"
@@ -115,10 +131,23 @@ export function AnalyticsScreen() {
       keyExtractor={(i) => i.siteId}
       ListHeaderComponent={
         <View style={styles.headerBlock}>
-         
+          <View style={styles.topRow}>
+            <Pressable style={styles.topIconBtn}>
+              <Text style={styles.topIcon}>☰</Text>
+            </Pressable>
+            <Text style={styles.topTitle}>Dashboard</Text>
+            <View style={styles.topRight}>
+              <Pressable style={styles.topIconBtn}>
+                <Text style={styles.topIcon}>◌</Text>
+              </Pressable>
+              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                <Text style={styles.avatarText}>AS</Text>
+              </Pressable>
+            </View>
+          </View>
           <View style={styles.dropdownWrap}>
             <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-              <Text style={styles.dropdownText}>{rangeLabel}</Text>
+              <Text style={styles.dropdownText}>⌁ {rangeLabel}</Text>
               <Text style={styles.dropdownIcon}>▾</Text>
             </Pressable>
             {filterOpen ? (
@@ -196,6 +225,14 @@ export function AnalyticsScreen() {
           ) : null}
 
           <CardContainer style={styles.hero}>
+            <View style={styles.heroHeadRow}>
+              <View style={styles.heroLeadingIcon}>
+                <Text style={styles.heroLeadingIconText}>◍</Text>
+              </View>
+              <View style={styles.heroTrend}>
+                <Text style={styles.heroTrendText}>↗ {paidPct.toFixed(1)}%</Text>
+              </View>
+            </View>
             <Text style={styles.heroLabel}>Total paid</Text>
             <Text style={styles.heroValue}>{data?.totals.paid ?? "—"}</Text>
             <View style={styles.heroGrid}>
@@ -213,6 +250,14 @@ export function AnalyticsScreen() {
 
           {data?.memberWallet ? (
             <CardContainer style={styles.hero}>
+              <View style={styles.heroHeadRow}>
+                <View style={styles.heroLeadingIcon}>
+                  <Text style={styles.heroLeadingIconText}>↓</Text>
+                </View>
+                <View style={styles.heroTrend}>
+                  <Text style={styles.heroTrendText}>↗ {pendingPct.toFixed(1)}%</Text>
+                </View>
+              </View>
               <Text style={styles.heroLabel}>Received from admin</Text>
               <Text style={styles.heroValue}>{data.memberWallet.received}</Text>
               <View style={styles.heroGrid}>
@@ -230,7 +275,13 @@ export function AnalyticsScreen() {
           ) : null}
 
           <CardContainer style={styles.insightCard}>
-            <InsightBars title="Spend by site" data={chartData} emptyLabel="No paid spend in this period yet" />
+            <View style={styles.sectionHeadRow}>
+              <Text style={styles.sectionTitle}>Spend by site</Text>
+              <Pressable style={styles.viewAllBtn}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </Pressable>
+            </View>
+            <InsightBars data={chartData} emptyLabel="No paid spend in this period yet" />
           </CardContainer>
 
           <CardContainer style={styles.highlightCard}>
@@ -253,6 +304,20 @@ export function AnalyticsScreen() {
             ) : (
               <Text style={styles.emptyInline}>You are all caught up — nothing highlighted.</Text>
             )}
+          </CardContainer>
+
+          <CardContainer style={styles.quickCard}>
+            <View style={styles.quickGrid}>
+              {quickStats.map((stat) => (
+                <View key={stat.key} style={styles.quickTile}>
+                  <View style={styles.quickIconWrap}>
+                    <Text style={styles.quickIcon}>{stat.icon}</Text>
+                  </View>
+                  <Text style={styles.quickLabel}>{stat.label}</Text>
+                  <Text style={styles.quickValue}>{stat.value}</Text>
+                </View>
+              ))}
+            </View>
           </CardContainer>
 
           <Text style={styles.listSectionTitle}>Paid by site</Text>
@@ -283,6 +348,26 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.background,
   },
   headerBlock: { gap: tokens.space[2], marginBottom: tokens.space[1] },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topIcon: { fontSize: 16, color: tokens.color.text },
+  topTitle: { flex: 1, marginLeft: 8, fontSize: 18, color: tokens.color.text, fontWeight: "600" },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#EDE4D6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   kicker: {
     fontSize: tokens.textSize.caption,
@@ -306,11 +391,28 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   hero: {
-    padding: tokens.space[3],
+    padding: tokens.space[2],
     gap: tokens.space[1],
-    borderWidth: 0,
+    borderWidth: 1,
     backgroundColor: tokens.color.panel,
   },
+  heroHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  heroLeadingIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F4EFE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroLeadingIconText: { fontSize: 14, color: "#7F725A", fontWeight: "700" },
+  heroTrend: {
+    borderRadius: tokens.radius.pill,
+    backgroundColor: "#ECF6F0",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  heroTrendText: { fontSize: 12, color: "#2E7E59", fontWeight: "600" },
   heroLabel: {
     fontSize: tokens.textSize.caption,
     fontWeight: "600",
@@ -319,7 +421,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   heroValue: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "700",
     color: tokens.color.positive,
     letterSpacing: -0.8,
@@ -328,17 +430,27 @@ const styles = StyleSheet.create({
   heroGrid: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: tokens.space[2],
+    marginTop: tokens.space[1],
     paddingTop: tokens.space[2],
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: tokens.color.border,
   },
   heroCell: { flex: 1, gap: 4 },
   heroDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch", backgroundColor: tokens.color.border, marginHorizontal: tokens.space[2] },
   heroCellLabel: { fontSize: tokens.textSize.caption, color: tokens.color.muted, fontWeight: "500" },
-  heroCellValue: { fontSize: tokens.textSize.subtitle, fontWeight: "700", color: tokens.color.text, fontVariant: ["tabular-nums"] },
-  heroCellValueWarn: { fontSize: tokens.textSize.subtitle, fontWeight: "700", color: tokens.color.negative, fontVariant: ["tabular-nums"] },
+  heroCellValue: { fontSize: 24, fontWeight: "700", color: tokens.color.text, fontVariant: ["tabular-nums"] },
+  heroCellValueWarn: { fontSize: 24, fontWeight: "700", color: tokens.color.negative, fontVariant: ["tabular-nums"] },
   insightCard: { paddingVertical: tokens.space[3] },
+  sectionHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.space[2] },
+  viewAllBtn: {
+    borderRadius: tokens.radius.pill,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.panelMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  viewAllText: { fontSize: 12, color: tokens.color.text, fontWeight: "600" },
   highlightCard: { gap: tokens.space[1] },
   sectionTitle: {
     fontSize: tokens.textSize.subtitle,
@@ -350,7 +462,7 @@ const styles = StyleSheet.create({
   sectionHint: { fontSize: tokens.textSize.caption, color: tokens.color.muted, marginTop: 2 },
   dropdownWrap: {
     alignSelf: "flex-end",
-    width: 170,
+    width: 176,
     position: "relative",
     zIndex: 20,
   },
@@ -358,9 +470,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.xl,
     backgroundColor: tokens.color.panel,
     paddingHorizontal: tokens.space[2],
     paddingVertical: 10,
@@ -372,7 +484,7 @@ const styles = StyleSheet.create({
     top: 44,
     left: 0,
     right: 0,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
     backgroundColor: tokens.color.panel,
@@ -387,7 +499,7 @@ const styles = StyleSheet.create({
   customRow: { flexDirection: "row", gap: tokens.space[1] },
   dateBtn: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
     backgroundColor: tokens.color.panel,
@@ -410,4 +522,19 @@ const styles = StyleSheet.create({
   },
   emptyInline: { fontSize: tokens.textSize.small, color: tokens.color.muted, marginTop: tokens.space[1] },
   empty: { textAlign: "center", color: tokens.color.muted, marginTop: tokens.space[4], fontSize: tokens.textSize.small },
+  quickCard: { paddingVertical: tokens.space[2] },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: tokens.space[2] },
+  quickTile: { width: "25%", alignItems: "center", paddingHorizontal: 4 },
+  quickIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: tokens.color.panelMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  quickIcon: { color: "#8D7F65", fontSize: 13, fontWeight: "700" },
+  quickLabel: { fontSize: 11, color: tokens.color.muted },
+  quickValue: { marginTop: 3, fontSize: 22, lineHeight: 24, color: tokens.color.text, fontWeight: "700" },
 });

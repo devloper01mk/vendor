@@ -12,7 +12,15 @@ const INTERNAL_MEMBER_ALLOCATION_VENDOR = "General Vendor";
 export class VendorsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listWithBalances(user: RequestUser, from?: string, to?: string) {
+  async listWithBalances(
+    user: RequestUser,
+    from?: string,
+    to?: string,
+    memberId?: string,
+    search?: string,
+  ) {
+    const effectiveMemberId =
+      user.role === "MEMBER" ? user.sub : memberId?.trim() ? memberId.trim() : undefined;
     const memberRequirementFilter: Prisma.RequirementWhereInput = {
       itemName: { not: INTERNAL_MEMBER_ALLOCATION_ITEM },
       ...(from || to
@@ -23,12 +31,20 @@ export class VendorsService {
             },
           }
         : {}),
-      ...(user.role === "MEMBER" ? { createdById: user.sub } : {}),
+      ...(effectiveMemberId ? { createdById: effectiveMemberId } : {}),
     };
 
     const vendors = await this.prisma.vendor.findMany({
       where: {
         name: { not: INTERNAL_MEMBER_ALLOCATION_VENDOR },
+        ...(search?.trim()
+          ? {
+              OR: [
+                { name: { contains: search.trim(), mode: "insensitive" } },
+                { gstNumber: { contains: search.trim(), mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
       orderBy: { name: "asc" },
       include: {

@@ -1,3 +1,4 @@
+
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
@@ -36,7 +37,13 @@ export class AuthService {
       role: user.role as UserRole,
       name: user.name,
     };
-    const accessToken = await this.jwt.signAsync(payload);
+
+    const signingSecret = process.env.JWT_SECRET ?? "dev-secret-change-me";
+  console.log("[JWT SIGN] secret source:", process.env.JWT_SECRET ? "env" : "fallback");
+  console.log("[JWT SIGN] secret preview:", `${signingSecret.slice(0, 4)}...${signingSecret.slice(-4)}`);
+  console.log("[JWT SIGN] payload:", payload);
+  const accessToken = await this.jwt.signAsync(payload);
+  console.log("[JWT SIGN] token preview:", `${accessToken.slice(0, 20)}...`);
     return { user, accessToken };
   }
 

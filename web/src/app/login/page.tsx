@@ -6,7 +6,6 @@ import { useAuthStore } from "@/features/auth/auth.store";
 import { getBackendPublicUrl } from "@/core/config";
 import { ApiError } from "@/core/api/http";
 import { useApi } from "@/core/use-api";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -49,70 +48,74 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <div className="mb-10 space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="text-sm text-muted">Vendor & site expense workspace</p>
-      </div>
-      <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-line bg-canvas p-6 shadow-sm">
-        <label className="block space-y-1 text-sm">
-          <span className="text-muted">Email</span>
-          <input
-            className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-ink outline-none focus:ring-2 focus:ring-ink/10"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            autoComplete="email"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="text-muted">Password</span>
-          <div className="space-y-1">
-            <input
-              className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-ink outline-none focus:ring-2 focus:ring-ink/10"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              className="text-xs font-medium text-ink/80 underline-offset-2 hover:underline"
-              onClick={() => setShowPassword((v) => !v)}
-            >
-              {showPassword ? "Hide password" : "Show password"}
-            </button>
+    <main className="min-h-screen bg-[#F6F3EE]">
+      <div className="grid min-h-screen lg:grid-cols-[44%_56%]">
+        <section className="hidden bg-[#151515] lg:flex lg:items-center lg:justify-center">
+          <div className="mx-auto w-full max-w-sm px-10">
+            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#C8B693]">Reckon</p>
+            <h1 className="mt-5 text-4xl font-semibold tracking-tight text-white">Welcome Back</h1>
+            <p className="mt-3 text-sm leading-6 text-[#B8B8B8]">
+              Sign in to continue managing your workspace with a calm and focused experience.
+            </p>
           </div>
-        </label>
-        {err ? <p className="text-sm text-red-600">{err}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-canvas hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? "Signing in…" : "Continue"}
-        </button>
-        <div className="relative py-2 text-center text-xs text-muted before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-line before:content-['']">
-          <span className="relative bg-canvas px-2">or</span>
-        </div>
-        <a
-          href={`${getBackendPublicUrl()}/auth/google`}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-line py-2.5 text-sm font-medium text-ink hover:bg-line/50"
-        >
-          Continue with Google
-        </a>
-        <p className="text-center text-xs text-muted">
-          Form uses seed defaults. Account head:{" "}
-          <code className="rounded bg-line/60 px-1">accounts@example.com</code> /{" "}
-          <code className="rounded bg-line/60 px-1">Account12345!</code>
-        </p>
-      </form>
-      <p className="mt-8 text-center text-xs text-muted">
-        <Link href="/dashboard" className="underline">
-          Skip preview
-        </Link>{" "}
-        — requires session for data
-      </p>
+        </section>
+
+        <section className="flex items-center justify-center px-6 py-10 sm:px-8">
+          <div className="w-full max-w-md rounded-2xl border border-[#E5DED3] bg-white p-7 shadow-[0_2px_10px_rgba(21,21,21,0.06)] sm:p-8">
+            <div className="mb-7">
+              <h2 className="text-3xl font-semibold tracking-tight text-[#2A2A2A]">Sign In</h2>
+              <p className="mt-2 text-sm text-[#7A7A7A]">Use your credentials to access your account.</p>
+            </div>
+
+            <form onSubmit={onSubmit} className="space-y-5">
+              <label className="block space-y-2 text-sm">
+                <span className="font-medium text-[#4A4A4A]">Email</span>
+                <input
+                  className="w-full rounded-lg border border-[#E5DED3] bg-white px-3.5 py-2.5 text-[#2A2A2A] outline-none transition focus:border-[#C8B693] focus:ring-2 focus:ring-[#C8B693]/20"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  autoComplete="email"
+                />
+              </label>
+
+              <label className="block space-y-2 text-sm">
+                <span className="font-medium text-[#4A4A4A]">Password</span>
+                <input
+                  className="w-full rounded-lg border border-[#E5DED3] bg-white px-3.5 py-2.5 text-[#2A2A2A] outline-none transition focus:border-[#C8B693] focus:ring-2 focus:ring-[#C8B693]/20"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                />
+              </label>
+
+              <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  className="text-[#7A7A7A] transition hover:text-[#2A2A2A]"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? "Hide password" : "Show password"}
+                </button>
+                <a href={`${getBackendPublicUrl()}/auth/google`} className="text-[#7A7A7A] transition hover:text-[#2A2A2A]">
+                  Forgot password?
+                </a>
+              </div>
+
+              {err ? <p className="text-sm text-red-600">{err}</p> : null}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-lg bg-[#C8B693] py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Signing in..." : "Sign In"}
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

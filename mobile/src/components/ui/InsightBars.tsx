@@ -10,14 +10,7 @@ type Props = {
   emptyLabel?: string;
 };
 
-const BAR_COLORS = [
-  tokens.color.accent,
-  "#6366F1",
-  "#0D9488",
-  "#D97706",
-  "#7C3AED",
-  "#64748B",
-];
+const BAR_COLORS = [tokens.color.accent, "#8E7E5B", "#BBAA86", "#D1C3A7"];
 
 export const InsightBars = React.memo(function InsightBars({ data, title, emptyLabel = "No data for this period" }: Props) {
   const max = useMemo(() => Math.max(...data.map((d) => d.value), 1), [data]);
@@ -73,9 +66,9 @@ const styles = StyleSheet.create({
   label: { flex: 1, fontSize: tokens.textSize.small, color: tokens.color.text, fontWeight: "500" },
   value: { fontSize: tokens.textSize.caption, color: tokens.color.muted, fontWeight: "600", fontVariant: ["tabular-nums"] },
   track: {
-    height: 8,
+    height: 7,
     borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.color.panelMuted,
+    backgroundColor: "#F0EAE1",
     overflow: "hidden",
   },
   fill: {

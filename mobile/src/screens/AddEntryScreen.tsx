@@ -230,12 +230,10 @@ export function AddEntryScreen() {
       ]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.kicker}>New entry</Text>
-      <Text style={styles.screenTitle}>Add transaction</Text>
-      <Text style={styles.screenSub}>Capture vendor, site, and amounts in one pass.</Text>
+      <Text style={styles.screenTitle}>Add Transaction</Text>
 
       <CardContainer style={styles.card}>
-        <Text style={styles.cardTitle}>Parties</Text>
+        <Text style={styles.cardTitle}>Type</Text>
         <Field label="Vendor">
           <View style={styles.vendorRow}>
             <View style={styles.vendorPickerWrap}>
@@ -250,7 +248,7 @@ export function AddEntryScreen() {
             </Pressable>
           </View>
         </Field>
-        <Field label="Site">
+        <Field label="From / To">
           <View style={styles.vendorRow}>
             <View style={styles.vendorPickerWrap}>
               <PickerLike options={sites} value={siteId} onChange={setSiteId} />
@@ -267,7 +265,7 @@ export function AddEntryScreen() {
       </CardContainer>
 
       <CardContainer style={styles.card}>
-        <Text style={styles.cardTitle}>Line item</Text>
+        <Text style={styles.cardTitle}>Amount</Text>
         <InputField
           label="Item"
           value={itemName}
@@ -287,7 +285,7 @@ export function AddEntryScreen() {
         <View style={styles.amountRow}>
           <View style={styles.amountHalf}>
             <InputField
-              label="Total amount"
+              label="Amount"
               value={total}
               onChangeText={(t) => {
                 setTotal(numberOnly(t));
@@ -312,10 +310,10 @@ export function AddEntryScreen() {
           </View>
         </View>
         <InputField
-          label="Note"
+          label="Note (Optional)"
           value={note}
           onChangeText={setNote}
-          placeholder="Internal reference or context"
+          placeholder="Enter note"
           multiline
           style={styles.inputNote}
         />
@@ -334,7 +332,7 @@ export function AddEntryScreen() {
         <Text style={[styles.status, status === "Failed to save" ? styles.statusErr : null]}>{status}</Text>
       ) : null}
 
-      <PrimaryButton title="Save transaction" onPress={save} disabled={busy} loading={busy} />
+      <PrimaryButton title="Save Transaction" onPress={save} disabled={busy} loading={busy} />
 
       <Modal visible={vendorSheetOpen} animationType="slide" transparent onRequestClose={() => setVendorSheetOpen(false)}>
         <View style={styles.sheetOverlay}>

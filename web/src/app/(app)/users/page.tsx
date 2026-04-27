@@ -2,6 +2,8 @@
 
 import { ApiError } from "@/core/api/http";
 import { useApi } from "@/core/use-api";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
@@ -54,9 +56,20 @@ function errorMessage(err: unknown): string {
 export default function UsersPage() {
   const api = useApi();
   const qc = useQueryClient();
+  const authUser = useAuthStore((s) => s.user);
+  const canManageUsers = authUser?.role === "ADMIN" || authUser?.role === "ACCOUNT_HEAD";
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [editingPayment, setEditingPayment] = useState<UserPaymentRow | null>(null);
   const [addingForRequirement, setAddingForRequirement] = useState<{ id: string; itemName: string } | null>(null);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("MEMBER");
+  const [userPassword, setUserPassword] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [userUiError, setUserUiError] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editMethod, setEditMethod] = useState("");
   const [editNote, setEditNote] = useState("");
@@ -140,6 +153,46 @@ export default function UsersPage() {
     },
   });
 
+  const createUser = useMutation({
+    mutationFn: async (vars: { name: string; email: string; role: string; password: string }) =>
+      api.post("/users", vars),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["users"] });
+      setCreateOpen(false);
+      setUserName("");
+      setUserEmail("");
+      setUserRole("MEMBER");
+      setUserPassword("");
+      setUserUiError("");
+    },
+    onError: (err) => setUserUiError(errorMessage(err)),
+  });
+
+  const updateUser = useMutation({
+    mutationFn: async (vars: { id: string; name: string; email: string; role: string }) =>
+      api.patch(`/users/${vars.id}`, vars),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["users"] });
+      setEditingUser(null);
+      setUserName("");
+      setUserEmail("");
+      setUserRole("MEMBER");
+      setUserUiError("");
+    },
+    onError: (err) => setUserUiError(errorMessage(err)),
+  });
+
+  const resetUserPassword = useMutation({
+    mutationFn: async (vars: { id: string; password: string }) =>
+      api.patch(`/users/${vars.id}/reset-password`, { password: vars.password }),
+    onSuccess: () => {
+      setResetTarget(null);
+      setResetPassword("");
+      setUserUiError("");
+    },
+    onError: (err) => setUserUiError(errorMessage(err)),
+  });
+
   const paymentError = useMemo(() => {
     if (!paymentQ.isError) return "";
     return errorMessage(paymentQ.error);
@@ -168,10 +221,29 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
-        <p className="mt-1 text-sm text-muted">Admin & account head view</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
+          <p className="mt-1 text-sm text-muted">Admin & account head view</p>
+        </div>
+        {canManageUsers ? (
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setCreateOpen(true);
+              setUserName("");
+              setUserEmail("");
+              setUserRole("MEMBER");
+              setUserPassword("");
+              setUserUiError("");
+            }}
+          >
+            Add user
+          </button>
+        ) : null}
       </div>
+      {userUiError ? <p className="text-sm text-red-600">{userUiError}</p> : null}
 
       <div className="surface overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -182,7 +254,7 @@ export default function UsersPage() {
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Blocked</th>
               <th className="px-4 py-3 font-medium">Created</th>
-              <th className="px-4 py-3 text-right font-medium">Payments</th>
+              <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -204,11 +276,42 @@ export default function UsersPage() {
                     <span className="text-xs text-muted">{u.isBlocked ? "Inactive" : "Active"}</span>
                   </label>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted">{new Date(u.createdAt).toLocaleString()}</td>
+                <td className="px-4 py-3 text-xs text-muted">{formatDateTime(u.createdAt)}</td>
                 <td className="px-4 py-3 text-right">
-                  <button type="button" className="btn-secondary" onClick={() => setSelectedUser(u)}>
-                    View payment history
-                  </button>
+                  <div className="inline-flex items-center gap-2">
+                    <button type="button" className="btn-secondary" onClick={() => setSelectedUser(u)}>
+                      Payments
+                    </button>
+                    {canManageUsers ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setEditingUser(u);
+                            setUserName(u.name);
+                            setUserEmail(u.email);
+                            setUserRole(u.role);
+                            setUserPassword("");
+                            setUserUiError("");
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setResetTarget(u);
+                            setResetPassword("");
+                            setUserUiError("");
+                          }}
+                        >
+                          Reset password
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -301,7 +404,7 @@ export default function UsersPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-sm font-medium">Paid amount: {Number(p.amount).toFixed(2)}</p>
-                          <p className="text-xs text-muted">Paid date: {new Date(p.paidAt).toLocaleString()}</p>
+                          <p className="text-xs text-muted">Paid date: {formatDateTime(p.paidAt)}</p>
                           <p className="text-xs text-muted">Method: {p.method?.trim() ? p.method : "-"}</p>
                           <p className="text-xs text-muted">Note: {p.note?.trim() ? p.note : "-"}</p>
                         </div>
@@ -351,6 +454,143 @@ export default function UsersPage() {
               {!paymentQ.data?.payments?.length && !paymentQ.isLoading ? (
                 <p className="text-sm text-muted">No payment history for this user.</p>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {createOpen || editingUser ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-ink/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setCreateOpen(false);
+              setEditingUser(null);
+            }
+          }}
+        >
+          <div className="surface w-full max-w-lg p-4">
+            <h4 className="text-base font-semibold">{createOpen ? "Add user" : "Edit user"}</h4>
+            <div className="mt-3 grid gap-3">
+              <label className="label block">
+                Name
+                <input className="input-base mt-1 w-full" value={userName} onChange={(e) => setUserName(e.target.value)} />
+              </label>
+              <label className="label block">
+                Email
+                <input className="input-base mt-1 w-full" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
+              </label>
+              <label className="label block">
+                Role
+                <AppSelect
+                  value={userRole}
+                  onChange={setUserRole}
+                  options={[
+                    { value: "ADMIN", label: "ADMIN" },
+                    { value: "ACCOUNT_HEAD", label: "ACCOUNT_HEAD" },
+                    { value: "MEMBER", label: "MEMBER" },
+                  ]}
+                />
+              </label>
+              {createOpen ? (
+                <label className="label block">
+                  Password
+                  <input
+                    type="password"
+                    className="input-base mt-1 w-full"
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                  />
+                </label>
+              ) : null}
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setCreateOpen(false);
+                  setEditingUser(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={createUser.isPending || updateUser.isPending}
+                onClick={() => {
+                  if (!userName.trim() || !userEmail.trim()) {
+                    setUserUiError("Name and email are required.");
+                    return;
+                  }
+                  if (createOpen) {
+                    if (userPassword.length < 8) {
+                      setUserUiError("Password must be at least 8 characters.");
+                      return;
+                    }
+                    createUser.mutate({
+                      name: userName.trim(),
+                      email: userEmail.trim(),
+                      role: userRole,
+                      password: userPassword,
+                    });
+                    return;
+                  }
+                  if (!editingUser) return;
+                  updateUser.mutate({
+                    id: editingUser.id,
+                    name: userName.trim(),
+                    email: userEmail.trim(),
+                    role: userRole,
+                  });
+                }}
+              >
+                {createOpen ? "Create user" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {resetTarget ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-ink/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setResetTarget(null);
+          }}
+        >
+          <div className="surface w-full max-w-lg p-4">
+            <h4 className="text-base font-semibold">Reset password</h4>
+            <p className="mt-1 text-xs text-muted">{resetTarget.email}</p>
+            <label className="label mt-3 block">
+              New password
+              <input
+                type="password"
+                className="input-base mt-1 w-full"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+              />
+            </label>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setResetTarget(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={resetUserPassword.isPending}
+                onClick={() => {
+                  if (resetPassword.length < 8) {
+                    setUserUiError("Password must be at least 8 characters.");
+                    return;
+                  }
+                  setUserUiError("");
+                  resetUserPassword.mutate({ id: resetTarget.id, password: resetPassword });
+                }}
+              >
+                Reset
+              </button>
             </div>
           </div>
         </div>
@@ -497,5 +737,20 @@ export default function UsersPage() {
       ) : null}
     </div>
   );
+}
+
+function formatDateTime(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }).format(d);
 }
 

@@ -8,6 +8,7 @@
 import type { VendorRow } from "@/features/expenses/types";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
+import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -92,30 +93,22 @@ export default function NewExpensePage() {
       </div>
 
       <div className="surface space-y-4 p-6">
-        <select
-          className="input-base"
+        <AppSelect
           value={vendorId}
-          onChange={(e) => setVendorId(e.target.value)}
-        >
-          <option value="">Select vendor</option>
-          {(vendorsQ.data ?? []).map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input-base"
+          onChange={setVendorId}
+          options={[
+            { value: "", label: "Select vendor" },
+            ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
+          ]}
+        />
+        <AppSelect
           value={siteId}
-          onChange={(e) => setSiteId(e.target.value)}
-        >
-          <option value="">Select site</option>
-          {(sitesQ.data ?? []).map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+          onChange={setSiteId}
+          options={[
+            { value: "", label: "Select site" },
+            ...(sitesQ.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
         <input
           className="input-base"
           placeholder="Item name"

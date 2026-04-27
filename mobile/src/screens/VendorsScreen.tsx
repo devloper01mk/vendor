@@ -1,15 +1,15 @@
 import { createApi } from "@/data/api/client";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InputField } from "@/components/ui/InputField";
-import { ListItem } from "@/components/ui/ListItem";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
 import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 type Vendor = {
   id: string;
@@ -64,6 +64,7 @@ export function VendorsScreen() {
   const [gstNumber, setGstNumber] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [logoName, setLogoName] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>("ALL");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -146,6 +147,7 @@ export function VendorsScreen() {
     setAlternatePhone("");
     setGstNumber("");
     setStatus(null);
+    setLogoName(null);
     setSheetOpen(true);
   }
 
@@ -156,7 +158,52 @@ export function VendorsScreen() {
     setAlternatePhone(v.alternatePhone ?? "");
     setGstNumber(v.gstNumber ?? "");
     setStatus(null);
+    setLogoName(null);
     setSheetOpen(true);
+  }
+
+  async function onPickLogo() {
+    Alert.alert("Upload Logo", "Choose image source", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const res = await launchCamera({
+            mediaType: "photo",
+            cameraType: "back",
+            quality: 0.8,
+          });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open camera");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset) {
+            setLogoName(asset.fileName ?? "Camera image selected");
+          }
+        },
+      },
+      {
+        text: "Gallery",
+        onPress: async () => {
+          const res = await launchImageLibrary({
+            mediaType: "photo",
+            selectionLimit: 1,
+            quality: 0.8,
+          });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open gallery");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset) {
+            setLogoName(asset.fileName ?? "Gallery image selected");
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   if (loading) {
@@ -176,6 +223,29 @@ export function VendorsScreen() {
         keyExtractor={(i) => i.id}
         ListHeaderComponent={
           <View style={styles.headerWrap}>
+            <View style={styles.topRow}>
+              <Pressable style={styles.topIconBtn}>
+                <Text style={styles.topIcon}>☰</Text>
+              </Pressable>
+              <Text style={styles.topTitle}>Vendors</Text>
+              <View style={styles.topRight}>
+                <Pressable style={styles.topIconBtn}>
+                  <Text style={styles.topIcon}>◌</Text>
+                </Pressable>
+                <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                  <Text style={styles.avatarText}>AS</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Text style={styles.searchIcon}>⌕</Text>
+                <Text style={styles.searchText}>Search vendors...</Text>
+              </View>
+              <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
+                <Text style={styles.addInlineBtnText}>+ Add Vendor</Text>
+              </Pressable>
+            </View>
             <View style={styles.dropdownWrap}>
               <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
                 <Text style={styles.dropdownText}>{rangeLabel}</Text>
@@ -235,29 +305,30 @@ export function VendorsScreen() {
             ) : null}
           </View>
         }
-        renderItem={({ item }) => (
-          <ListItem
-            title={item.name}
-            subtitle={`Phone ${item.phone ?? "-"} • Alt ${item.alternatePhone ?? "-"}\nGST ${item.gstNumber ?? "-"}`}
-            amountLabel={`Pending ${item.totals.pending}`}
-            rightSlot={
-              <View style={styles.rightWrap}>
-                <Text style={styles.positive}>Paid {item.totals.paid}</Text>
-                <Pressable style={styles.editBtn} onPress={() => openEditSheet(item)} hitSlop={8}>
-                  <Text style={styles.editIcon}>✎</Text>
-                </Pressable>
+        renderItem={({ item, index }) => (
+          <Pressable style={styles.vendorCard} onPress={() => navigation.navigate("VendorDetails", { id: item.id })}>
+            <View style={styles.vendorIconWrap}>
+              <Text style={styles.vendorIcon}>{["◨", "◧", "◩", "◪"][index % 4]}</Text>
+            </View>
+            <View style={styles.vendorMiddle}>
+              <Text style={styles.vendorName}>{item.name}</Text>
+              <Text style={styles.vendorSub}>{item.gstNumber ?? "No GST"}</Text>
+              <Text style={styles.vendorSub}>{item.phone ?? "-"}</Text>
+            </View>
+            <View style={styles.vendorRight}>
+              <Text style={styles.vendorSpendLabel}>Total Spend</Text>
+              <Text style={styles.vendorSpendValue}>₹ {item.totals.paid}</Text>
+              <View style={styles.statusPill}>
+                <Text style={styles.statusPillText}>{Number(item.totals.pending || 0) > 0 ? "Active" : "Inactive"}</Text>
               </View>
-            }
-            onPress={() => navigation.navigate("VendorDetails", { id: item.id })}
-            showChevron
-          />
+              <Pressable style={styles.editBtn} onPress={() => openEditSheet(item)} hitSlop={8}>
+                <Text style={styles.editIcon}>✎</Text>
+              </Pressable>
+            </View>
+          </Pressable>
         )}
         ListEmptyComponent={<Text style={styles.empty}>{listError ? "Unable to load vendors" : "No vendors"}</Text>}
       />
-
-      <Pressable style={styles.fab} onPress={openAddSheet} hitSlop={8}>
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
 
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
         <View style={styles.dropdownOverlay}>
@@ -294,19 +365,27 @@ export function VendorsScreen() {
         <View style={styles.sheetOverlay}>
           <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)} />
           <CardContainer style={styles.sheet}>
-            <Text style={styles.formTitle}>{editingVendorId ? "Edit vendor" : "Add vendor"}</Text>
-            <InputField label="Vendor name" placeholder="Enter vendor name" value={name} onChangeText={setName} />
-            <InputField label="Phone" placeholder="Enter phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-            <InputField
-              label="Alternate phone"
-              placeholder="Enter alternate phone"
-              value={alternatePhone}
-              onChangeText={setAlternatePhone}
-              keyboardType="phone-pad"
-            />
-            <InputField label="GST number" placeholder="Enter GST number" value={gstNumber} onChangeText={setGstNumber} />
+            <Text style={styles.formTitle}>{editingVendorId ? "Edit Vendor" : "Add Vendor"}</Text>
+            <View style={styles.formTopRow}>
+              <Pressable style={styles.uploadTile} onPress={onPickLogo}>
+                <Text style={styles.uploadTileIcon}>◫</Text>
+                <Text style={styles.uploadTileText}>{logoName ? "Logo Selected" : "Upload Logo"}</Text>
+                {logoName ? <Text style={styles.uploadTileFile}>{logoName}</Text> : null}
+              </Pressable>
+              <View style={styles.formFields}>
+                <InputField label="Vendor Name" placeholder="Enter vendor name" value={name} onChangeText={setName} />
+                <InputField label="GST Number" placeholder="Enter GST number" value={gstNumber} onChangeText={setGstNumber} />
+                <InputField label="Phone" placeholder="Enter phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                <InputField
+                  label="Alternate Phone"
+                  placeholder="Enter alternate phone"
+                  value={alternatePhone}
+                  onChangeText={setAlternatePhone}
+                />
+              </View>
+            </View>
             <PrimaryButton
-              title={editingVendorId ? "Update vendor" : "Add vendor"}
+              title={editingVendorId ? "Save Vendor" : "Save Vendor"}
               onPress={onAddVendor}
               disabled={busy || !name.trim()}
               loading={busy}
@@ -332,6 +411,36 @@ const styles = StyleSheet.create({
   form: {},
   formTitle: { fontSize: 17, lineHeight: 24, fontWeight: "600", color: tokens.color.text, marginBottom: 8 },
   meta: { fontSize: 13, color: tokens.color.muted },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topIconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  topIcon: { fontSize: 16, color: tokens.color.text },
+  topTitle: { flex: 1, marginLeft: 8, fontSize: tokens.textSize.title, color: tokens.color.text, fontWeight: "600" },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDE4D6", alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: tokens.space[1] },
+  searchBox: {
+    flex: 1,
+    height: 42,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.panel,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+  },
+  searchIcon: { color: tokens.color.muted, marginRight: 8 },
+  searchText: { color: "#A0927B", fontSize: 12 },
+  addInlineBtn: {
+    height: 42,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: tokens.color.accent,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addInlineBtnText: { fontSize: 12, color: tokens.color.onAccent, fontWeight: "600" },
   positive: { fontSize: 13, color: tokens.color.positive, fontWeight: "600" },
   rightWrap: { alignItems: "flex-end", gap: 8 },
   editBtn: {
@@ -426,19 +535,38 @@ const styles = StyleSheet.create({
     fontSize: tokens.textSize.caption,
     fontWeight: "600",
   },
-  fab: {
-    position: "absolute",
-    right: tokens.space[2],
-    bottom: tokens.space[3],
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: tokens.color.accent,
+  vendorCard: {
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: tokens.color.panel,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  vendorIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#F4EFE7",
     alignItems: "center",
     justifyContent: "center",
-    ...tokens.shadow.fab,
   },
-  fabText: { color: tokens.color.onAccent, fontSize: 30, lineHeight: 32, fontWeight: "600" },
+  vendorIcon: { fontSize: 13, color: "#7F725A", fontWeight: "700" },
+  vendorMiddle: { flex: 1 },
+  vendorName: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
+  vendorSub: { marginTop: 2, fontSize: 11, color: tokens.color.muted },
+  vendorRight: { alignItems: "flex-end", gap: 4 },
+  vendorSpendLabel: { fontSize: 10, color: tokens.color.muted },
+  vendorSpendValue: { fontSize: 16, color: tokens.color.text, fontWeight: "700" },
+  statusPill: {
+    borderRadius: 10,
+    backgroundColor: "#EAF5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusPillText: { fontSize: 10, color: "#2E7E59", fontWeight: "600" },
   sheetOverlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: {
@@ -447,4 +575,26 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     maxHeight: "85%",
   },
+  formTopRow: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 8 },
+  uploadTile: {
+    width: 82,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: tokens.color.panelMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  uploadTileIcon: { fontSize: 18, color: "#8A7E68", marginBottom: 6 },
+  uploadTileText: { fontSize: 10, color: tokens.color.muted, fontWeight: "600", textAlign: "center" },
+  uploadTileFile: {
+    marginTop: 4,
+    fontSize: 9,
+    color: tokens.color.text,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  formFields: { flex: 1 },
 });

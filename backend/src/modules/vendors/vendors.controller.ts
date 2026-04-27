@@ -29,8 +29,10 @@ export class VendorsController {
     @CurrentUser() user: RequestUser,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("memberId") memberId?: string,
+    @Query("search") search?: string,
   ) {
-    return this.vendors.listWithBalances(user, from, to);
+    return this.vendors.listWithBalances(user, from, to, memberId, search);
   }
 
   @Post()

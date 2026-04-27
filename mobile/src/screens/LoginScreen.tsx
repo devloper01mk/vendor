@@ -24,6 +24,7 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (config.googleWebClientId) {
@@ -35,6 +36,7 @@ export function LoginScreen() {
 
   async function onLogin() {
     setErr(null);
+    setInfo(null);
     setBusy(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -72,6 +74,7 @@ export function LoginScreen() {
 
   async function onGoogleLogin() {
     setErr(null);
+    setInfo(null);
     setBusy(true);
     try {
       if (!config.googleWebClientId) {
@@ -116,14 +119,43 @@ export function LoginScreen() {
     }
   }
 
+  async function onForgotPassword() {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setErr("Enter your email first");
+      return;
+    }
+    setErr(null);
+    setInfo(null);
+    setBusy(true);
+    try {
+      const api = createApi(() => null);
+      const res = await api.post<{ message?: string }>("/auth/forgot-password-request", {
+        email: normalizedEmail,
+      });
+      setInfo(res.message ?? "Request sent to admin.");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErr(error.message || "Failed to send request");
+      } else {
+        setErr("Failed to send request");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <KeyboardAvoidingView style={styles.wrap} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={styles.brand}>
-        <Text style={styles.brandMark}>{"\u25C9"}</Text>
-        <Text style={styles.title}>Sign in</Text>
-        <Text style={styles.sub}>Vendor & site expenses</Text>
+      <View style={styles.hero}>
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeText}>⌂</Text>
+        </View>
+        <Text style={styles.heroTitle}>Welcome Back!</Text>
+        <Text style={styles.heroSub}>Sign in to continue to your account</Text>
       </View>
       <View style={styles.card}>
+        <Text style={styles.title}>Login</Text>
         <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
@@ -135,21 +167,27 @@ export function LoginScreen() {
           onChangeText={setEmail}
         />
         <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          secureTextEntry={!showPassword}
-          placeholder="••••••••"
-          placeholderTextColor={tokens.color.muted}
-          value={password}
-          onChangeText={setPassword}
-        />
-        <Pressable
-          style={({ pressed }) => [styles.passwordToggle, pressed && styles.passwordTogglePressed]}
-          onPress={() => setShowPassword((v) => !v)}
-        >
-          <Text style={styles.passwordToggleText}>{showPassword ? "Hide password" : "Show password"}</Text>
+        <View style={styles.passwordWrap}>
+          <TextInput
+            style={styles.passwordInput}
+            secureTextEntry={!showPassword}
+            placeholder="Enter your password"
+            placeholderTextColor={tokens.color.muted}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.eyeBtn, pressed && styles.passwordTogglePressed]}
+            onPress={() => setShowPassword((v) => !v)}
+          >
+            <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
+          </Pressable>
+        </View>
+        <Pressable style={styles.forgotWrap} onPress={onForgotPassword}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
         </Pressable>
         {err ? <Text style={styles.err}>{err}</Text> : null}
+        {info ? <Text style={styles.info}>{info}</Text> : null}
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && !busy && styles.btnPressed]}
           onPress={onLogin}
@@ -157,13 +195,13 @@ export function LoginScreen() {
         >
           {busy ? <ActivityIndicator color={tokens.color.onAccent} /> : <Text style={styles.btnText}>Continue</Text>}
         </Pressable>
-        <Pressable
+        {/* <Pressable
           style={({ pressed }) => [styles.googleBtn, pressed && !busy && styles.googlePressed]}
           onPress={onGoogleLogin}
           disabled={busy}
         >
           <Text style={styles.googleBtnText}>Continue with Google</Text>
-        </Pressable>
+        </Pressable> */}
       </View>
     </KeyboardAvoidingView>
   );
@@ -172,23 +210,46 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    justifyContent: "center",
     padding: tokens.space[3],
     backgroundColor: tokens.color.background,
+    justifyContent: "center",
   },
-  brand: { marginBottom: tokens.space[3], alignItems: "center" },
-  brandMark: {
-    fontSize: 28,
-    color: tokens.color.accent,
-    marginBottom: tokens.space[2],
+  hero: {
+    marginBottom: tokens.space[3],
+    alignItems: "center",
+    backgroundColor: "#F1EBDD",
+    borderRadius: tokens.radius.xl,
+    paddingVertical: tokens.space[3],
+    paddingHorizontal: tokens.space[2],
+    borderWidth: 1,
+    borderColor: tokens.color.border,
   },
-  title: {
-    fontSize: tokens.textSize.hero,
+  heroBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    marginBottom: 10,
+  },
+  heroBadgeText: { fontSize: 22, color: "#8F7E60", fontWeight: "700" },
+  heroTitle: {
+    fontSize: 22,
     fontWeight: "700",
     color: tokens.color.text,
-    letterSpacing: -0.6,
+    letterSpacing: -0.4,
   },
-  sub: { marginTop: 6, fontSize: tokens.textSize.small, color: tokens.color.muted, fontWeight: "500" },
+  heroSub: { marginTop: 4, fontSize: tokens.textSize.small, color: tokens.color.muted, fontWeight: "500" },
+  title: {
+    fontSize: tokens.textSize.title,
+    fontWeight: "600",
+    color: tokens.color.text,
+    letterSpacing: -0.3,
+    marginBottom: 4,
+  },
   card: {
     borderRadius: tokens.radius.xl,
     padding: tokens.space[3],
@@ -196,7 +257,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     ...tokens.shadow.card,
-    gap: tokens.space[1],
+    gap: 10,
   },
   label: {
     fontSize: tokens.textSize.caption,
@@ -216,7 +277,38 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.panelMuted,
     color: tokens.color.text,
   },
+  passwordWrap: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.panelMuted,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: tokens.space[2],
+    paddingVertical: 14,
+    fontSize: tokens.textSize.body,
+    color: tokens.color.text,
+  },
+  eyeBtn: {
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eyeIcon: { color: tokens.color.muted, fontSize: 14 },
+  forgotWrap: {
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+  },
+  forgotText: {
+    color: tokens.color.accent,
+    fontSize: tokens.textSize.caption,
+    fontWeight: "600",
+  },
   err: { color: tokens.color.negative, fontSize: tokens.textSize.small, fontWeight: "600", marginTop: tokens.space[1] },
+  info: { color: tokens.color.muted, fontSize: tokens.textSize.small, fontWeight: "600", marginTop: tokens.space[1] },
   passwordToggle: {
     alignSelf: "flex-end",
     marginTop: 2,

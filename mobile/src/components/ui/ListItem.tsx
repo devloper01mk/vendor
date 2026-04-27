@@ -69,7 +69,7 @@ export const ListItem = React.memo(function ListItem({
 const styles = StyleSheet.create({
   row: {
     borderRadius: tokens.radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     padding: tokens.space[2],
@@ -83,14 +83,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.995 }],
   },
   selected: {
-    borderColor: tokens.color.accent,
+    borderColor: "#D2C1A2",
     backgroundColor: tokens.color.accentMuted,
   },
   leading: { justifyContent: "center" },
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.lg,
     backgroundColor: tokens.color.accentMuted,
     alignItems: "center",
     justifyContent: "center",
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   amountMuted: { color: tokens.color.muted },
   chevron: {
     fontSize: 22,
-    color: tokens.color.borderStrong,
+    color: tokens.color.muted,
     fontWeight: "300",
     marginLeft: 2,
     lineHeight: 24,

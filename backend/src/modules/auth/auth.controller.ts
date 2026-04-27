@@ -12,13 +12,18 @@ import {
 import { AuthGuard } from "@nestjs/passport";
 import type { Request, Response } from "express";
 import { AuthService } from "./auth.service";
+import { ForgotPasswordRequestDto } from "./dto/forgot-password-request.dto";
 import { GoogleIdTokenDto } from "./dto/google-id-token.dto";
 import { LoginDto } from "./dto/login.dto";
+import { UsersService } from "../users/users.service";
 import type { PublicUser } from "../users/users.service";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+  ) {}
 
   @Post("login")
   login(@Body() body: LoginDto, @Headers("x-client-platform") platform?: string) {
@@ -58,5 +63,10 @@ export class AuthController {
       throw new UnauthorizedException("Only MEMBER users can log in from the mobile app");
     }
     return session;
+  }
+
+  @Post("forgot-password-request")
+  async forgotPasswordRequest(@Body() body: ForgotPasswordRequestDto) {
+    return this.users.createPasswordResetRequest(body.email, body.note);
   }
 }

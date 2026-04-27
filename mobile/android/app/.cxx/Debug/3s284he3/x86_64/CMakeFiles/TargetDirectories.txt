@@ -10,6 +10,9 @@
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/rndocumentpicker_autolinked_build/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/rndocumentpicker_autolinked_build/CMakeFiles/rebuild_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/RNImagePickerSpec_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/RNImagePickerSpec_autolinked_build/CMakeFiles/rebuild_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/safeareacontext_autolinked_build/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/safeareacontext_autolinked_build/CMakeFiles/rebuild_cache.dir

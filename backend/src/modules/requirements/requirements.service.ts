@@ -3,7 +3,10 @@ import { Prisma, RequirementStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AddPaymentDto } from "./dto/add-payment.dto";
 import { CreateRequirementDto } from "./dto/create-requirement.dto";
-import { ListRequirementsQueryDto } from "./dto/list-requirements.query.dto";
+import {
+  ListRequirementsQueryDto,
+  RequirementFlowFilter,
+} from "./dto/list-requirements.query.dto";
 import { ToggleHighlightDto } from "./dto/toggle-highlight.dto";
 import { UpdateRequirementDto } from "./dto/update-requirement.dto";
 import type { RequestUser } from "../../common/decorators/current-user.decorator";
@@ -46,6 +49,12 @@ export class RequirementsService {
   ) {
     const paid = this.sumPayments(row.payments);
     const remaining = row.totalAmount.sub(paid);
+    const isInternalAllocation = row.itemName === INTERNAL_MEMBER_ALLOCATION_ITEM;
+    const uiType = isInternalAllocation
+      ? "RECEIVED"
+      : remaining.gt(new Prisma.Decimal("0.01"))
+        ? "PENDING"
+        : "SENT";
     return {
       id: row.id,
       itemName: row.itemName,
@@ -66,6 +75,7 @@ export class RequirementsService {
       paidTotal: paid.toString(),
       remaining: remaining.toString(),
       isFullyPaid: remaining.lte(new Prisma.Decimal(0)),
+      uiType,
       payments: row.payments.map((p) => ({
         id: p.id,
         amount: p.amount.toString(),
@@ -100,13 +110,22 @@ export class RequirementsService {
   async list(user: RequestUser, query: ListRequirementsQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 25;
-    const where: Prisma.RequirementWhereInput = {
-      itemName: { not: INTERNAL_MEMBER_ALLOCATION_ITEM },
-    };
+    const flow = query.flow ?? RequirementFlowFilter.ALL;
+    const where: Prisma.RequirementWhereInput = {};
+    if (flow === RequirementFlowFilter.RECEIVED) {
+      where.itemName = INTERNAL_MEMBER_ALLOCATION_ITEM;
+    } else {
+      where.itemName = { not: INTERNAL_MEMBER_ALLOCATION_ITEM };
+    }
 
     if (query.vendorId) where.vendorId = query.vendorId;
     if (query.siteId) where.siteId = query.siteId;
     if (query.status) where.status = query.status;
+    if (flow === RequirementFlowFilter.PENDING) {
+      where.status = RequirementStatus.PENDING;
+    } else if (flow === RequirementFlowFilter.SENT) {
+      where.status = RequirementStatus.COMPLETED;
+    }
     if (query.from || query.to) {
       where.entryDate = {};
       if (query.from) where.entryDate.gte = new Date(query.from);

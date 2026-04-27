@@ -14,7 +14,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: tokens.radius.lg,
     padding: tokens.space[2],
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     ...tokens.shadow.card,

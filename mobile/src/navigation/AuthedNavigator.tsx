@@ -22,9 +22,9 @@ function EmptyScreen() {
 
 const TAB_ICON: Record<string, string> = {
   Dashboard: "\u2302",
-  Transactions: "\u25AE",
-  Vendors: "\u25C7",
-  Sites: "\u25F0",
+  Transactions: "\u2630",
+  Vendors: "\u25A4",
+  Sites: "\u25CE",
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
@@ -38,7 +38,7 @@ function TabNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route, navigation }) => ({
-        headerShown: true,
+        headerShown: false,
         headerTitleStyle: {
           fontWeight: "600",
           fontSize: tokens.textSize.subtitle,
@@ -59,9 +59,10 @@ function TabNavigator() {
         tabBarActiveTintColor: tokens.color.accent,
         tabBarInactiveTintColor: tokens.color.muted,
         tabBarStyle: {
-          borderTopWidth: 0,
-          backgroundColor: "#111317",
-          height: 74,
+          borderTopWidth: 1,
+          borderTopColor: tokens.color.border,
+          backgroundColor: "#FFFFFF",
+          height: 76,
           paddingTop: tokens.space[1],
           paddingBottom: tokens.space[1],
         },
@@ -74,7 +75,7 @@ function TabNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={AnalyticsScreen} options={{ title: "Dashboard" }} />
-      <Tab.Screen name="Transactions" component={TransactionsScreen} options={{ title: "Transaction" }} />
+      <Tab.Screen name="Transactions" component={TransactionsScreen} options={{ title: "Transactions" }} />
       <Tab.Screen
         name="AddAction"
         component={EmptyScreen}
@@ -95,8 +96,8 @@ function TabNavigator() {
           ),
         }}
       />
-      <Tab.Screen name="Vendors" component={VendorsScreen} options={{ title: "Vendor" }} />
-      <Tab.Screen name="Sites" component={SitesScreen} options={{ title: "Site" }} />
+      <Tab.Screen name="Vendors" component={VendorsScreen} options={{ title: "Vendors" }} />
+      <Tab.Screen name="Sites" component={SitesScreen} options={{ title: "Sites" }} />
     </Tab.Navigator>
   );
 }
@@ -127,44 +128,47 @@ export function AuthedNavigator() {
 
 const styles = StyleSheet.create({
   tabIcon: {
-    fontSize: 24,
+    fontSize: 21,
     marginBottom: -1,
   },
-  tabIconFocused: { color: "#F5F7FA" },
-  tabIconIdle: { color: "#8A9099" },
+  tabIconFocused: { color: tokens.color.accent },
+  tabIconIdle: { color: tokens.color.muted },
   addFab: {
     alignSelf: "center",
     marginTop: 0,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#15181D",
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    backgroundColor: "#C8B58E",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#F1F4F8",
-    shadowColor: "#000",
-    shadowOpacity: 0.28,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    shadowColor: "#151515",
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    elevation: 4,
   },
   addFabText: {
-    color: "#F7FAFF",
-    fontSize: 30,
-    lineHeight: 30,
+    color: "#FFF8EC",
+    fontSize: 28,
+    lineHeight: 28,
     fontWeight: "400",
-    marginTop: -1,
+    marginTop: 0,
+    textAlign: "center",
+    includeFontPadding: false,
   },
   settingsBtn: {
     paddingHorizontal: tokens.space[2],
     paddingVertical: tokens.space[1],
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.lg,
     backgroundColor: tokens.color.accentMuted,
   },
   settingsBtnPressed: { opacity: 0.85 },
   settingsBtnText: {
-    color: tokens.color.accent,
+    color: tokens.color.text,
     fontSize: tokens.textSize.caption,
     fontWeight: "700",
   },

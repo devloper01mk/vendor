@@ -12,6 +12,13 @@ import {
   Min,
 } from "class-validator";
 
+export enum RequirementFlowFilter {
+  ALL = "ALL",
+  RECEIVED = "RECEIVED",
+  SENT = "SENT",
+  PENDING = "PENDING",
+}
+
 export class ListRequirementsQueryDto {
   @IsOptional()
   @IsUUID()
@@ -37,6 +44,10 @@ export class ListRequirementsQueryDto {
   @IsString()
   @MaxLength(200)
   search?: string;
+
+  @IsOptional()
+  @IsEnum(RequirementFlowFilter)
+  flow?: RequirementFlowFilter;
 
   @IsOptional()
   @Type(() => Number)

@@ -1,7 +1,6 @@
 import { createApi } from "@/data/api/client";
 import { ApiError } from "@/data/api/client";
 import { CardContainer } from "@/components/ui/CardContainer";
-import { ListItem } from "@/components/ui/ListItem";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
@@ -23,6 +22,7 @@ type Tx = {
   vendor: { name: string };
   site: { name: string };
   createdBy: { id: string };
+  uiType?: "RECEIVED" | "SENT" | "PENDING";
 };
 
 type ListResp = {
@@ -84,6 +84,8 @@ export function TransactionsScreen() {
   const [customTo, setCustomTo] = useState("");
   const [pickerField, setPickerField] = useState<"from" | "to" | null>(null);
   const [pickerDate, setPickerDate] = useState(new Date());
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "RECEIVED" | "SENT" | "PENDING">("ALL");
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
   const rangeLabel =
     rangeFilter === "ALL"
       ? "All"
@@ -94,6 +96,7 @@ export function TransactionsScreen() {
           : rangeFilter === "MONTH"
             ? "This month"
             : "Custom";
+  const topRows = useMemo(() => rows.slice(0, 24), [rows]);
 
   const totals = useMemo(() => {
     let total = 0;
@@ -115,7 +118,12 @@ export function TransactionsScreen() {
       try {
         const api = createApi(() => token);
         const range = getRangeQuery(rangeFilter, customFrom, customTo);
-        const data = await api.get<ListResp>("/requirements", { page: "1", limit: "100", ...range });
+        const data = await api.get<ListResp>("/requirements", {
+          page: "1",
+          limit: "100",
+          flow: typeFilter,
+          ...range,
+        });
         if (!cancelled) setRows(data.items);
       } catch (e) {
         if (cancelled) return;
@@ -133,7 +141,7 @@ export function TransactionsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token, rangeFilter, customFrom, customTo]);
+  }, [token, rangeFilter, customFrom, customTo, typeFilter]);
 
   useFocusEffect(load);
 
@@ -153,12 +161,33 @@ export function TransactionsScreen() {
           styles.list,
           { paddingTop: Math.max(insets.top, tokens.space[2]), paddingBottom: tokens.space[5] + 24 },
         ]}
-        data={rows}
+        data={topRows}
         keyExtractor={(i) => i.id}
         ListHeaderComponent={
           <View style={styles.head}>
-            <Text style={styles.screenTitle}>Activity</Text>
-            <Text style={styles.screenSub}>Totals across loaded requirements</Text>
+            <View style={styles.topRow}>
+              <Pressable style={styles.topIconBtn}>
+                <Text style={styles.topIcon}>☰</Text>
+              </Pressable>
+              <Text style={styles.topTitle}>Transactions</Text>
+              <View style={styles.topRight}>
+                <Pressable style={styles.topIconBtn}>
+                  <Text style={styles.topIcon}>◌</Text>
+                </Pressable>
+                <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                  <Text style={styles.avatarText}>AS</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Text style={styles.searchIcon}>⌕</Text>
+                <Text style={styles.searchText}>Search transactions...</Text>
+              </View>
+              <Pressable style={styles.filterBtn}>
+                <Text style={styles.filterBtnText}>≡</Text>
+              </Pressable>
+            </View>
 
             {err ? (
               <CardContainer style={styles.banner}>
@@ -167,26 +196,26 @@ export function TransactionsScreen() {
               </CardContainer>
             ) : null}
 
-            <View style={styles.kpiRow}>
-              <CardContainer style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Total</Text>
-                <Text style={styles.kpiValue}>{totals.total.toFixed(0)}</Text>
-              </CardContainer>
-              <CardContainer style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Paid</Text>
-                <Text style={[styles.kpiValue, styles.positive]}>{totals.paid.toFixed(0)}</Text>
-              </CardContainer>
-              <CardContainer style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Due</Text>
-                <Text style={[styles.kpiValue, styles.negative]}>{totals.due.toFixed(0)}</Text>
-              </CardContainer>
-            </View>
-
-            <Text style={styles.sectionLabel}>Recent</Text>
-            <View style={styles.dropdownWrap}>
-              <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-                <Text style={styles.dropdownText}>{rangeLabel}</Text>
-                <Text style={styles.dropdownIcon}>▾</Text>
+            <View style={styles.tabRow}>
+              <Pressable style={styles.typeDropdownBtn} onPress={() => setTypeFilterOpen(true)}>
+                <View style={styles.typeLeftWrap}>
+                  <Text style={styles.typeLeftIcon}>◌</Text>
+                  <Text style={styles.typeDropdownText}>
+                    {typeFilter === "ALL"
+                      ? "All"
+                      : typeFilter === "RECEIVED"
+                        ? "Received"
+                        : typeFilter === "SENT"
+                          ? "Sent"
+                          : "Pending"}
+                  </Text>
+                </View>
+                <Text style={styles.typeDropdownIcon}>▾</Text>
+              </Pressable>
+              <Pressable style={styles.calendarDropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
+                <Text style={styles.calendarIcon}>⌁</Text>
+                <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
+                <Text style={styles.typeDropdownIcon}>▾</Text>
               </Pressable>
             </View>
             {rangeFilter === "CUSTOM" ? (
@@ -234,27 +263,44 @@ export function TransactionsScreen() {
             ) : null}
           </View>
         }
-        renderItem={({ item }) => (
-          <ListItem
-            title={item.itemName}
-            subtitle={`${item.vendor.name} · ${item.site.name} · Paid ${item.paidTotal}${item.entryDate ? ` · ${shortDate(item.entryDate)}` : ""}`}
-            amountLabel={`Due ${item.remaining}`}
-            amountTone="negative"
-            leadingGlyph={item.isFlagged ? "!" : undefined}
-            onPress={() => navigation.navigate("Payment", { id: item.id })}
-            rightSlot={
-              me?.id && item.createdBy?.id === me.id ? (
-                <Pressable
-                  style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
-                  onPress={() => navigation.navigate("EditEntry", { id: item.id })}
-                  hitSlop={8}
-                >
-                  <Text style={styles.editIcon}>{"\u270E"}</Text>
-                </Pressable>
-              ) : null
-            }
-          />
-        )}
+        renderItem={({ item }) => {
+          const kind = item.uiType ?? "PENDING";
+          const inbound = kind === "RECEIVED";
+          const amountValue =
+            kind === "RECEIVED" ? item.paidTotal : kind === "SENT" ? item.paidTotal : item.remaining;
+          return (
+            <Pressable style={styles.txCard} onPress={() => navigation.navigate("Payment", { id: item.id })}>
+              <View style={styles.txIconWrap}>
+                <Text style={[styles.txIcon, inbound ? styles.txIconPositive : styles.txIconNegative]}>{inbound ? "↓" : "↑"}</Text>
+              </View>
+              <View style={styles.txMiddle}>
+                <Text style={styles.txTitle} numberOfLines={1}>
+                  {inbound ? "From " : "To "} {item.vendor.name}
+                </Text>
+                <Text style={styles.txMeta}>Payment</Text>
+                <Text style={styles.txMeta}>{shortDate(item.entryDate)}</Text>
+              </View>
+              <View style={styles.txRight}>
+                <Text style={[styles.txAmount, inbound ? styles.positive : styles.negative]}>
+                  {inbound ? "+" : "-"}
+                  {amountValue}
+                </Text>
+                <View style={styles.statusPill}>
+                  <Text style={styles.statusText}>{kind === "PENDING" ? "Pending" : "Completed"}</Text>
+                </View>
+                {me?.id && item.createdBy?.id === me.id ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
+                    onPress={() => navigation.navigate("EditEntry", { id: item.id })}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.editIcon}>✎</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        }}
         ListEmptyComponent={
           <Text style={styles.empty}>{err ? "—" : "No transactions yet. Tap + to add one."}</Text>
         }
@@ -289,6 +335,27 @@ export function TransactionsScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={typeFilterOpen} transparent animationType="fade" onRequestClose={() => setTypeFilterOpen(false)}>
+        <View style={styles.dropdownOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTypeFilterOpen(false)} />
+          <View style={styles.dropdownSheet}>
+            {(["ALL", "RECEIVED", "SENT", "PENDING"] as const).map((f) => (
+              <Pressable
+                key={f}
+                style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}
+                onPress={() => {
+                  setTypeFilter(f);
+                  setTypeFilterOpen(false);
+                }}
+              >
+                <Text style={[styles.dropdownItemText, typeFilter === f && styles.dropdownItemTextOn]}>
+                  {f === "ALL" ? "All" : f === "RECEIVED" ? "Received" : f === "SENT" ? "Sent" : "Pending"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -316,33 +383,72 @@ const styles = StyleSheet.create({
   banner: { gap: tokens.space[1], borderColor: tokens.color.negativeMuted, backgroundColor: tokens.color.negativeMuted },
   bannerTitle: { color: tokens.color.negative, fontWeight: "700", fontSize: tokens.textSize.small },
   bannerMsg: { color: tokens.color.muted, fontSize: tokens.textSize.caption, lineHeight: 18 },
-  kpiRow: { flexDirection: "row", gap: tokens.space[1] },
-  kpiCard: { flex: 1, padding: tokens.space[2] },
-  kpiLabel: {
-    fontSize: tokens.textSize.caption,
-    lineHeight: 16,
-    color: tokens.color.muted,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topIconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  topIcon: { fontSize: 16, color: tokens.color.text },
+  topTitle: { flex: 1, marginLeft: 8, fontSize: tokens.textSize.title, color: tokens.color.text, fontWeight: "600" },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDE4D6", alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: tokens.space[1] },
+  searchBox: {
+    flex: 1,
+    height: 42,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.panel,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
   },
-  kpiValue: {
-    marginTop: 6,
-    fontSize: tokens.textSize.subtitle,
-    lineHeight: 24,
-    fontWeight: "700",
-    color: tokens.color.text,
-    fontVariant: ["tabular-nums"],
+  searchIcon: { color: tokens.color.muted, marginRight: 8 },
+  searchText: { color: "#A0927B", fontSize: 12 },
+  filterBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.panel,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  filterBtnText: { color: tokens.color.text, fontSize: 14 },
+  tabRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  typeDropdownBtn: {
+    height: 36,
+    flex: 1,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  typeLeftWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  typeLeftIcon: { fontSize: 12, color: "#8A7E68" },
+  typeDropdownText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
+  typeDropdownIcon: { fontSize: 12, color: tokens.color.muted },
+  calendarDropdownBtn: {
+    height: 36,
+    minWidth: 126,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  calendarIcon: { fontSize: 12, color: "#8A7E68" },
+  calendarDropdownText: { flex: 1, fontSize: 12, color: "#5F5342", fontWeight: "600" },
   positive: { color: tokens.color.positive },
   negative: { color: tokens.color.negative },
-  sectionLabel: {
-    fontSize: tokens.textSize.subtitle,
-    fontWeight: "600",
-    color: tokens.color.text,
-    letterSpacing: -0.2,
-    marginTop: tokens.space[1],
-  },
   dropdownWrap: {
     marginTop: tokens.space[1],
     alignSelf: "flex-end",
@@ -395,8 +501,8 @@ const styles = StyleSheet.create({
   },
   dateBtnText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   editBtn: {
-    width: 36,
-    height: 36,
+    width: 24,
+    height: 24,
     borderRadius: tokens.radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
@@ -405,6 +511,39 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.panelMuted,
   },
   editBtnPressed: { opacity: 0.85, backgroundColor: tokens.color.border },
-  editIcon: { fontSize: 16, color: tokens.color.text },
+  editIcon: { fontSize: 12, color: tokens.color.text },
+  txCard: {
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: tokens.color.panel,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  txIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F4EFE7",
+  },
+  txIcon: { fontSize: 14, fontWeight: "700" },
+  txIconPositive: { color: "#2E7E59" },
+  txIconNegative: { color: "#B55050" },
+  txMiddle: { flex: 1 },
+  txTitle: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
+  txMeta: { fontSize: 11, color: tokens.color.muted, marginTop: 2 },
+  txRight: { alignItems: "flex-end", gap: 6 },
+  txAmount: { fontSize: 20, fontWeight: "700" },
+  statusPill: {
+    borderRadius: 10,
+    backgroundColor: "#EAF5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusText: { fontSize: 10, color: "#2E7E59", fontWeight: "600" },
   empty: { textAlign: "center", color: tokens.color.muted, marginTop: tokens.space[4], fontSize: tokens.textSize.small, lineHeight: 20 },
 });

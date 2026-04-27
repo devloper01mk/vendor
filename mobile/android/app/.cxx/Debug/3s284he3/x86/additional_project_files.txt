@@ -19,3 +19,10 @@
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/react/renderer/components/rndocumentpicker/States.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/react/renderer/components/rndocumentpicker/rndocumentpickerJSI-generated.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/rndocumentpicker-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/RNImagePickerSpec-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ComponentDescriptors.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/EventEmitters.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/Props.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/RNImagePickerSpecJSI-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/ShadowNodes.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNImagePickerSpec_autolinked_build/CMakeFiles/react_codegen_RNImagePickerSpec.dir/react/renderer/components/RNImagePickerSpec/States.cpp.o

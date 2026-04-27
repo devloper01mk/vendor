@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateSiteDto } from "./dto/create-site.dto";
 import { UpdateSiteDto } from "./dto/update-site.dto";
@@ -9,10 +10,41 @@ const INTERNAL_MEMBER_ALLOCATION_SITE = "General Site";
 export class SitesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
-    return this.prisma.site.findMany({
+  async list() {
+    const rows = await this.prisma.site.findMany({
       where: { name: { not: INTERNAL_MEMBER_ALLOCATION_SITE } },
       orderBy: { name: "asc" },
+      include: {
+        requirements: {
+          select: {
+            id: true,
+            totalAmount: true,
+            payments: { select: { amount: true } },
+          },
+        },
+      },
+    });
+
+    return rows.map((site) => {
+      let totalSpent = new Prisma.Decimal(0);
+      for (const req of site.requirements) {
+        for (const pay of req.payments) {
+          totalSpent = totalSpent.add(pay.amount);
+        }
+      }
+
+      const txCount = site.requirements.length;
+      return {
+        id: site.id,
+        name: site.name,
+        code: site.code,
+        address: site.address,
+        metrics: {
+          totalSpent: totalSpent.toString(),
+          transactions: txCount,
+          status: txCount > 0 ? "ACTIVE" : "INACTIVE",
+        },
+      };
     });
   }
 

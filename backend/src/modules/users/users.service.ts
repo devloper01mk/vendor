@@ -1,10 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, RequirementStatus, UserRole } from "@prisma/client";
 import * as bcrypt from "bcrypt";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import { PrismaService } from "../../prisma/prisma.service";
 import type { RequestUser } from "../../common/decorators/current-user.decorator";
 import { AddUserPaymentDto } from "./dto/add-user-payment.dto";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateMeDto } from "./dto/update-me.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 
 export type PublicUser = {
@@ -19,6 +23,30 @@ export type PublicUser = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
   private static readonly MEMBER_ALLOCATION_ITEM = "Member Fund Allocation";
+  private static readonly RESET_REQUESTS_FILE = join(
+    process.cwd(),
+    "storage",
+    "password-reset-requests.json",
+  );
+
+  private readResetRequests() {
+    const file = UsersService.RESET_REQUESTS_FILE;
+    const dir = join(process.cwd(), "storage");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (!existsSync(file)) return [] as Array<Record<string, unknown>>;
+    try {
+      return JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
+    } catch {
+      return [];
+    }
+  }
+
+  private writeResetRequests(rows: Array<Record<string, unknown>>) {
+    const file = UsersService.RESET_REQUESTS_FILE;
+    const dir = join(process.cwd(), "storage");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(file, JSON.stringify(rows, null, 2), "utf8");
+  }
 
   async ensureDefaultAdmin() {
     const email = (process.env.ADMIN_EMAIL || "admin@example.com").toLowerCase();
@@ -111,6 +139,37 @@ export class UsersService {
     });
   }
 
+  async updateByAdmin(id: string, dto: UpdateUserDto) {
+    const data: Prisma.UserUpdateInput = {
+      ...(dto.email ? { email: dto.email.toLowerCase() } : {}),
+      ...(dto.name ? { name: dto.name } : {}),
+      ...(dto.role ? { role: dto.role } : {}),
+    };
+
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data,
+        select: { id: true, email: true, name: true, role: true, isBlocked: true, createdAt: true },
+      });
+    } catch {
+      throw new NotFoundException("User not found");
+    }
+  }
+
+  async resetPasswordByAdmin(id: string, password: string) {
+    const passwordHash = await bcrypt.hash(password, 12);
+    try {
+      await this.prisma.user.update({
+        where: { id },
+        data: { passwordHash },
+      });
+      return { ok: true };
+    } catch {
+      throw new NotFoundException("User not found");
+    }
+  }
+
   async list() {
     return this.prisma.user.findMany({
       select: { id: true, email: true, name: true, role: true, isBlocked: true, createdAt: true },
@@ -125,6 +184,88 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException("User not found");
     return user;
+  }
+
+  async getMe(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, name: true, role: true, isBlocked: true, createdAt: true },
+    });
+    if (!user) throw new NotFoundException("User not found");
+    return user;
+  }
+
+  async createPasswordResetRequest(email: string, note?: string) {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true, email: true, name: true, role: true },
+    });
+    if (!user || user.role !== UserRole.MEMBER) {
+      // Keep response generic for privacy.
+      return { ok: true, message: "If this account exists, your request has been sent to admin." };
+    }
+
+    const rows = this.readResetRequests();
+    rows.unshift({
+      id: `prr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      note: note?.trim() || null,
+      status: "PENDING",
+      createdAt: new Date().toISOString(),
+      resolvedAt: null,
+      resolvedBy: null,
+    });
+    this.writeResetRequests(rows);
+    return { ok: true, message: "Password reset request sent to admin." };
+  }
+
+  listPasswordResetRequests() {
+    return this.readResetRequests();
+  }
+
+  resolvePasswordResetRequest(requestId: string, adminEmail: string) {
+    const rows = this.readResetRequests();
+    const next = rows.map((row) =>
+      row.id === requestId
+        ? {
+            ...row,
+            status: "RESOLVED",
+            resolvedAt: new Date().toISOString(),
+            resolvedBy: adminEmail,
+          }
+        : row,
+    );
+    this.writeResetRequests(next);
+    return { ok: true };
+  }
+
+  async updateMe(id: string, dto: UpdateMeDto) {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, email: true, name: true, role: true, isBlocked: true, createdAt: true },
+    });
+    return updated;
+  }
+
+  async changeMyPassword(id: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException("User not found");
+
+    // For Google-only users, allow setting a first password.
+    if (user.passwordHash) {
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) throw new BadRequestException("Current password is incorrect");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    return { ok: true };
   }
 
   setBlocked(id: string, blocked: boolean) {

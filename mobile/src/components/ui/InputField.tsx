@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from "react-native";
 import { tokens } from "@/theme/tokens";
 
@@ -17,14 +17,23 @@ export const InputField = React.memo(function InputField({
   containerStyle,
   ...rest
 }: InputFieldProps) {
+  const [focused, setFocused] = useState(false);
   const showHint = error || helperText;
   return (
     <View style={[styles.wrap, containerStyle]}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         {...rest}
-        style={[styles.input, error ? styles.inputError : null, style]}
+        style={[styles.input, focused ? styles.inputFocused : null, error ? styles.inputError : null, style]}
         placeholderTextColor={tokens.color.muted}
+        onFocus={(e) => {
+          setFocused(true);
+          rest.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          rest.onBlur?.(e);
+        }}
       />
       {showHint ? <Text style={error ? styles.error : styles.helper}>{error ?? helperText}</Text> : null}
     </View>
@@ -43,9 +52,9 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   input: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: tokens.color.border,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.lg,
     backgroundColor: tokens.color.panel,
     minHeight: 48,
     paddingHorizontal: tokens.space[2],
@@ -53,6 +62,10 @@ const styles = StyleSheet.create({
     color: tokens.color.text,
     fontSize: tokens.textSize.body,
     lineHeight: 22,
+  },
+  inputFocused: {
+    borderColor: tokens.color.focus,
+    backgroundColor: tokens.color.panel,
   },
   inputError: {
     borderColor: tokens.color.negative,
