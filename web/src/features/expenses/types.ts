@@ -41,15 +41,21 @@ export type RequirementRow = {
 export type DashboardSummary = {
   totals: { committed: string; paid: string; pending: string };
   userFunding?: { paidToUsers: string };
+  memberWallet?: { received: string; spent: string; balance: string } | null;
   vendorPending: { vendorId: string; name: string; pending: string }[];
   siteSpend: { siteId: string; name: string; paid: string }[];
   monthly: { month: string; paid: string; committed: string }[];
+  highlighted?: { requirementId: string; itemName: string; vendorName: string; siteName: string }[];
   alerts: { type: string; requirementId: string; message: string }[];
+  requirementsTracked?: number;
 };
 
 export type VendorRow = {
   id: string;
   name: string;
   gstNumber: string | null;
+  phone?: string | null;
+  alternatePhone?: string | null;
+  imageUrl?: string | null;
   totals: { committed: string; paid: string; pending: string };
 };

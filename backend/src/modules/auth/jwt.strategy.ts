@@ -9,7 +9,10 @@ type Payload = { sub: string; email: string; role: string; name?: string };
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        ExtractJwt.fromUrlQueryParameter("accessToken"),
+      ]),
       ignoreExpiration: false,
       secretOrKey: config.get<string>("JWT_SECRET") ?? "dev-secret-change-me",
     });

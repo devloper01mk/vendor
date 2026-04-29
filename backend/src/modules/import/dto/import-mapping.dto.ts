@@ -2,6 +2,11 @@ import { IsOptional, IsString, MaxLength } from "class-validator";
 
 /** Maps spreadsheet column *titles* (first row) to logical fields. */
 export class ImportColumnMapDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  requirementId?: string;
+
   @IsString()
   @MaxLength(120)
   itemName!: string;
@@ -18,6 +23,41 @@ export class ImportColumnMapDto {
   @IsString()
   @MaxLength(120)
   vendorName!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  vendorPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  vendorAlternatePhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  vendorEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  vendorGstNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  vendorAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  siteCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  siteAddress?: string;
 
   @IsString()
   @MaxLength(120)

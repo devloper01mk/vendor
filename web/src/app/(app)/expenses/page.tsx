@@ -1,11 +1,11 @@
 "use client";
 
 import type { RequirementRow, VendorRow } from "@/features/expenses/types";
+import { getApiBaseUrl } from "@/core/config";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/style.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,18 +23,41 @@ export default function ExpensesPage() {
   const api = useApi();
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const isReadOnly = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
   const canManageFlags = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
   const [vendorId, setVendorId] = useState("");
   const [siteId, setSiteId] = useState("");
-  const [search, setSearch] = useState("");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [draftRange, setDraftRange] = useState<DateRange | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState<Date | undefined>(undefined);
-  const [presetOpen, setPresetOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<RequirementRow | null>(null);
-  const presetRef = useRef<HTMLDivElement | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentInvoiceFile, setPaymentInvoiceFile] = useState<File | null>(null);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentUiError, setPaymentUiError] = useState("");
+  const [invoiceUiError, setInvoiceUiError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [vendorIdDraft, setVendorIdDraft] = useState("");
+  const [siteIdDraft, setSiteIdDraft] = useState("");
+  const [itemNameDraft, setItemNameDraft] = useState("");
+  const [brandDraft, setBrandDraft] = useState("");
+  const [qtyDraft, setQtyDraft] = useState("1");
+  const [totalDraft, setTotalDraft] = useState("");
+  const [entryDateDraft, setEntryDateDraft] = useState(() => new Date().toISOString().slice(0, 10));
+  const [payAmountDraft, setPayAmountDraft] = useState("");
+  const [createStatus, setCreateStatus] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const invoiceInputRef = useRef<HTMLInputElement | null>(null);
+  const paymentInvoiceInputRef = useRef<HTMLInputElement | null>(null);
+  const [paymentInvoiceRequirementId, setPaymentInvoiceRequirementId] = useState<string | null>(null);
   const from = customRange?.from ? fmtDate(customRange.from) : "";
   const to = customRange?.to ? fmtDate(customRange.to) : "";
 
@@ -46,18 +69,6 @@ export default function ExpensesPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [calendarOpen]);
-
-  useEffect(() => {
-    if (!presetOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      if (!presetRef.current) return;
-      if (!presetRef.current.contains(e.target as Node)) {
-        setPresetOpen(false);
-      }
-    }
-    window.addEventListener("mousedown", onMouseDown);
-    return () => window.removeEventListener("mousedown", onMouseDown);
-  }, [presetOpen]);
 
   const vendorsQ = useQuery({
     queryKey: ["vendors"],
@@ -75,11 +86,10 @@ export default function ExpensesPage() {
       limit: "100",
       ...(vendorId ? { vendorId } : {}),
       ...(siteId ? { siteId } : {}),
-      ...(search ? { search } : {}),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
     }),
-    [vendorId, siteId, search, from, to],
+    [vendorId, siteId, from, to],
   );
 
   const listQ = useQuery({
@@ -194,19 +204,145 @@ export default function ExpensesPage() {
     },
   });
 
-  const applyPreset = (preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth" | "custom") => {
-    if (preset === "custom") {
-      setDraftRange(customRange);
-      setCalendarMonth(customRange?.from ?? new Date());
-      setCalendarOpen(true);
-      setPresetOpen(false);
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return api.postMultipart<{ imported: number; updated: number; skipped: number; errors: string[] }>(
+        "/import/spreadsheet",
+        form,
+      );
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["requirements"] }),
+        qc.invalidateQueries({ queryKey: ["vendors"] }),
+        qc.invalidateQueries({ queryKey: ["sites"] }),
+      ]);
+      setImportStatus(
+        `Import complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped.`,
+      );
+    },
+    onError: (err) => {
+      setImportStatus(err instanceof Error ? err.message : "Import failed.");
+    },
+  });
+
+  const addPaymentMutation = useMutation({
+    mutationFn: async (vars: { requirementId: string; amount: number; method?: string; note?: string; paidAt?: string }) =>
+      api.post<RequirementRow>(`/requirements/${vars.requirementId}/payments`, {
+        amount: vars.amount,
+        method: vars.method || undefined,
+        note: vars.note || undefined,
+        paidAt: vars.paidAt || undefined,
+      }),
+    onSuccess: async (updated) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["requirements"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+      setDetailRow(updated);
+      setPaymentOpen(false);
+      setPaymentAmount("");
+      setPaymentMethod("");
+      setPaymentNote("");
+      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentInvoiceFile(null);
+      setPaymentUiError("");
+    },
+    onError: (err) => {
+      setPaymentUiError(err instanceof Error ? err.message : "Could not record payment.");
+    },
+  });
+
+  const uploadPaymentInvoiceMutation = useMutation({
+    mutationFn: async (vars: { requirementId: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", vars.file);
+      return api.postMultipart<RequirementRow>(`/requirements/${vars.requirementId}/invoice`, form);
+    },
+    onSuccess: async (updatedRow) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["requirements"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+      setDetailRow(updatedRow);
+      setInvoiceUiError("");
+    },
+    onError: (err) => {
+      setInvoiceUiError(err instanceof Error ? err.message : "Could not upload invoice.");
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        vendorId: vendorIdDraft,
+        siteId: siteIdDraft,
+        itemName: itemNameDraft,
+        brand: brandDraft || undefined,
+        quantity: Number(qtyDraft),
+        totalAmount: Number(totalDraft),
+        entryDate: new Date(entryDateDraft).toISOString(),
+        status: "PENDING",
+        billReceived: false,
+      };
+      const row = await api.post<{ id: string }>("/requirements", body);
+      if (payAmountDraft && Number(payAmountDraft) > 0) {
+        await api.post(`/requirements/${row.id}/payments`, { amount: Number(payAmountDraft) });
+      }
+      const invoiceFile = invoiceInputRef.current?.files?.[0];
+      if (invoiceFile) {
+        const form = new FormData();
+        form.append("file", invoiceFile);
+        form.append("gstDetails", '{"gstin":"","taxableValue":"","cgst":"","sgst":""}');
+        await api.postMultipart(`/requirements/${row.id}/invoice`, form);
+      }
+      return row.id;
+    },
+    onSuccess: async (id) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["requirements"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+      setCreateStatus(`Saved. Requirement ${id}`);
+      setCreateOpen(false);
+      setVendorIdDraft("");
+      setSiteIdDraft("");
+      setItemNameDraft("");
+      setBrandDraft("");
+      setQtyDraft("1");
+      setTotalDraft("");
+      setEntryDateDraft(new Date().toISOString().slice(0, 10));
+      setPayAmountDraft("");
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+    },
+    onError: (err) => {
+      setCreateStatus(err instanceof Error ? err.message : "Could not save. Check fields and try again.");
+    },
+  });
+
+  function handleImportClick() {
+    setImportStatus(null);
+    fileInputRef.current?.click();
+  }
+
+  function handleExportClick() {
+    setExportStatus(null);
+    if (!token) {
+      setExportStatus("Please sign in again.");
       return;
     }
-    const range = getPresetRange(preset);
-    setCustomRange(range);
-    setDraftRange(range);
-    setPresetOpen(false);
-  };
+    try {
+      const base = getApiBaseUrl();
+      const url = new URL(`${base}/import/spreadsheet/export`);
+      url.searchParams.set("accessToken", token);
+      window.open(url.toString(), "_blank", "noopener,noreferrer");
+      setExportStatus("Export started.");
+    } catch (err) {
+      setExportStatus(err instanceof Error ? err.message : "Export failed.");
+    }
+  }
 
   if (listQ.isError) {
     return (
@@ -225,27 +361,19 @@ export default function ExpensesPage() {
           <p className="mt-1 text-sm text-[#7C7266]">Clean ledger view with consistent admin styling.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="relative" ref={presetRef}>
-            <button
-              type="button"
-              className="w-64 rounded-xl border border-[#E5DED3] bg-white px-3 py-2.5 text-left text-sm text-[#2A2A2A] shadow-sm outline-none transition hover:bg-[#FAF7F2]"
-              onClick={() => setPresetOpen((prev) => !prev)}
-            >
-              {customRange?.from
-                ? `${fmtDate(customRange.from)}${customRange?.to ? ` → ${fmtDate(customRange.to)}` : ""}`
-                : "Select date range"}
-            </button>
-            {presetOpen ? (
-              <div className="absolute z-20 mt-2 w-64 rounded-xl border border-[#E5DED3] bg-white p-1.5 shadow-[0_10px_30px_rgba(21,21,21,0.12)]">
-                <PresetItem label="Today" onClick={() => applyPreset("today")} />
-                <PresetItem label="Yesterday" onClick={() => applyPreset("yesterday")} />
-                <PresetItem label="One Week" onClick={() => applyPreset("week")} />
-                <PresetItem label="This Month" onClick={() => applyPreset("thisMonth")} />
-                <PresetItem label="Last Month" onClick={() => applyPreset("lastMonth")} />
-                <PresetItem label="Custom" onClick={() => applyPreset("custom")} />
-              </div>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            className="w-64 rounded-xl border border-[#E5DED3] bg-white px-3 py-2.5 text-left text-sm text-[#2A2A2A] shadow-sm outline-none transition hover:bg-[#FAF7F2]"
+            onClick={() => {
+              setDraftRange(customRange);
+              setCalendarMonth(customRange?.from ?? new Date());
+              setCalendarOpen(true);
+            }}
+          >
+            {customRange?.from
+              ? `${fmtDate(customRange.from)}${customRange?.to ? ` → ${fmtDate(customRange.to)}` : ""}`
+              : "Select date range"}
+          </button>
           <button
             type="button"
             className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
@@ -256,49 +384,71 @@ export default function ExpensesPage() {
           >
             Clear dates
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              importMutation.mutate(file);
+              e.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF] disabled:opacity-60"
+            onClick={handleImportClick}
+            disabled={importMutation.isPending || listQ.isLoading}
+          >
+            {importMutation.isPending ? "Importing..." : "Import"}
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF] disabled:opacity-60"
+            onClick={handleExportClick}
+            disabled={importMutation.isPending}
+          >
+            Export
+          </button>
           {!isReadOnly ? (
-            <Link
-              href="/expenses/new"
+            <button
+              type="button"
               className="inline-flex items-center rounded-xl bg-[#C8B693] px-4 py-2.5 text-sm font-medium text-[#2A2A2A] transition hover:brightness-95"
+              onClick={() => {
+                setCreateStatus(null);
+                setCreateOpen(true);
+              }}
             >
-              New expense
-            </Link>
+              Add expense
+            </button>
           ) : null}
         </div>
       </div>
+      {importStatus ? <p className="text-sm text-[#7C7266]">{importStatus}</p> : null}
+      {exportStatus ? <p className="text-sm text-[#7C7266]">{exportStatus}</p> : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-[#E5DED3] bg-white p-4 shadow-[0_1px_2px_rgba(21,21,21,0.06),0_8px_24px_rgba(21,21,21,0.04)]">
-        <Field label="Search">
-          <input
-            className="input-base mt-1 w-48"
-            placeholder="Item or brand"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+      <div className="rounded-2xl border border-[#E5DED3] bg-white p-3 shadow-[0_1px_2px_rgba(21,21,21,0.06),0_8px_24px_rgba(21,21,21,0.04)]">
+        <div className="flex flex-wrap items-center gap-2">
+          <AppSelect
+            value={vendorId}
+            onChange={setVendorId}
+            className="h-10 min-w-[220px] rounded-lg border-[#ECE5DA] bg-[#FCFBF8] text-sm"
+            options={[
+              { value: "", label: "All Vendor" },
+              ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
+            ]}
           />
-        </Field>
-        <div className="flex flex-wrap items-end justify-end gap-3">
-          <Field label="Vendor">
-            <AppSelect
-              value={vendorId}
-              onChange={setVendorId}
-              className="w-48"
-              options={[
-                { value: "", label: "All" },
-                ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
-              ]}
-            />
-          </Field>
-          <Field label="Site">
-            <AppSelect
-              value={siteId}
-              onChange={setSiteId}
-              className="w-48"
-              options={[
-                { value: "", label: "All" },
-                ...(sitesQ.data ?? []).map((s) => ({ value: s.id, label: s.name })),
-              ]}
-            />
-          </Field>
+          <AppSelect
+            value={siteId}
+            onChange={setSiteId}
+            className="h-10 min-w-[220px] rounded-lg border-[#ECE5DA] bg-[#FCFBF8] text-sm"
+            options={[
+              { value: "", label: "All Site" },
+              ...(sitesQ.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
         </div>
       </div>
 
@@ -461,29 +611,65 @@ export default function ExpensesPage() {
                 <Info label="Status" value={detailRow.status} />
                 <Info label="Vendor" value={detailRow.vendor.name} />
                 <Info label="Site" value={detailRow.site.name} />
-                <Info label="Entry user" value={detailRow.createdBy.name} />
+                {user?.role !== "MEMBER" ? <Info label="Entry user" value={detailRow.createdBy.name} /> : null}
                 <Info label="Quantity" value={detailRow.quantity} />
                 <Info label="Total" value={detailRow.totalAmount} />
                 <Info label="Paid" value={detailRow.paidTotal} />
                 <Info label="Due" value={detailRow.remaining} />
-                <Info label="Bill received" value={detailRow.billReceived ? "Yes" : "No"} />
+                {user?.role !== "MEMBER" ? (
+                  <Info label="Bill received" value={detailRow.billReceived ? "Yes" : "No"} />
+                ) : null}
               </div>
               <div className="rounded-xl border border-line p-3">
                 <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
                 <p className="mt-2">{detailRow.notes ?? "—"}</p>
               </div>
-              <div className="rounded-xl border border-line p-3">
-                <p className="text-xs uppercase tracking-wide text-muted">Invoice</p>
-                {detailRow.invoice?.fileUrl ? (
-                  <a href={detailRow.invoice.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-ink underline-offset-2 hover:underline">
-                    Download invoice
-                  </a>
-                ) : (
-                  <p className="mt-2 text-sm text-muted">No invoice attached.</p>
-                )}
-              </div>
+              {user?.role !== "MEMBER" ? (
+                <div className="rounded-xl border border-line p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted">Invoice</p>
+                  {detailRow.invoice?.fileUrl ? (
+                    <a href={detailRow.invoice.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-ink underline-offset-2 hover:underline">
+                      Download invoice
+                    </a>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted">No invoice attached.</p>
+                  )}
+                </div>
+              ) : null}
               <div className="rounded-xl border border-line p-3">
                 <p className="text-xs uppercase tracking-wide text-muted">Payment timeline</p>
+                <input
+                  ref={paymentInvoiceInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    const requirementId = paymentInvoiceRequirementId;
+                    if (!file || !requirementId) return;
+                    setInvoiceUiError("");
+                    uploadPaymentInvoiceMutation.mutate({ requirementId, file });
+                    e.currentTarget.value = "";
+                  }}
+                />
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setEditingPaymentId(null);
+                      setPaymentOpen(true);
+                      setPaymentAmount("");
+                      setPaymentMethod("");
+                      setPaymentNote("");
+                      setPaymentDate(new Date().toISOString().slice(0, 10));
+                      setPaymentInvoiceFile(null);
+                      setPaymentUiError("");
+                    }}
+                  >
+                    Record payment
+                  </button>
+                </div>
                 <div className="mt-2 overflow-x-auto">
                   {(() => {
                     const sorted = [...(detailRow.payments ?? [])].sort(
@@ -517,18 +703,65 @@ export default function ExpensesPage() {
                                 <td className="px-2 py-2 tabular-nums">{runningPaid.toFixed(2)}</td>
                                 <td className="px-2 py-2 tabular-nums">{remaining.toFixed(2)}</td>
                                 <td className="px-2 py-2">
-                                  {detailRow.invoice?.fileUrl ? (
-                                    <a
-                                      href={detailRow.invoice.fileUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-ink underline-offset-2 hover:underline"
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink transition hover:bg-panel-muted"
+                                      title="Edit payment"
+                                      onClick={() => {
+                                        setEditingPaymentId(p.id);
+                                        setPaymentOpen(true);
+                                        setPaymentAmount(amount.toFixed(2));
+                                        setPaymentMethod(p.method ?? "");
+                                        setPaymentNote(p.note ?? "");
+                                        setPaymentDate(p.paidAt.slice(0, 10));
+                                        setPaymentInvoiceFile(null);
+                                        setPaymentUiError("");
+                                      }}
                                     >
-                                      View invoice
-                                    </a>
-                                  ) : (
-                                    <span className="text-muted">—</span>
-                                  )}
+                                      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+                                        <path
+                                          fill="currentColor"
+                                          d="M14.69 2.86a2 2 0 0 1 2.83 2.83l-8.4 8.4a1 1 0 0 1-.46.26l-3.2.8a1 1 0 0 1-1.21-1.21l.8-3.2a1 1 0 0 1 .26-.46l8.4-8.4ZM13.28 4.27 6.16 11.39l-.42 1.66 1.66-.42 7.12-7.12-1.24-1.24Z"
+                                        />
+                                      </svg>
+                                    </button>
+                                    {detailRow.invoice?.fileUrl ? (
+                                      <a
+                                        href={detailRow.invoice.fileUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink transition hover:bg-panel-muted"
+                                        title="Download invoice"
+                                      >
+                                        <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+                                          <path
+                                            fill="currentColor"
+                                            d="M10 2a1 1 0 0 1 1 1v7.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42L9 10.59V3a1 1 0 0 1 1-1Zm-6 13a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1 1 0 0 1 1-1Z"
+                                          />
+                                        </svg>
+                                      </a>
+                                    ) : (
+                                      <span className="text-muted">—</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink transition hover:bg-panel-muted"
+                                      title="Upload invoice"
+                                      disabled={uploadPaymentInvoiceMutation.isPending}
+                                      onClick={() => {
+                                        setPaymentInvoiceRequirementId(detailRow.id);
+                                        paymentInvoiceInputRef.current?.click();
+                                      }}
+                                    >
+                                      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+                                        <path
+                                          fill="currentColor"
+                                          d="M10 3a1 1 0 0 1 1 1v6h2.59l-3.3 3.3a.4.4 0 0 1-.58 0L6.41 10H9V4a1 1 0 0 1 1-1Zm-6 12a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1 1 0 0 1 1-1Z"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -540,6 +773,7 @@ export default function ExpensesPage() {
                   {!detailRow.payments?.length ? (
                     <p className="text-sm text-muted">No payment history yet.</p>
                   ) : null}
+                  {invoiceUiError ? <p className="mt-2 text-sm text-red-600">{invoiceUiError}</p> : null}
                 </div>
               </div>
               {canManageFlags ? (
@@ -563,19 +797,272 @@ export default function ExpensesPage() {
                   </div>
                 </div>
               ) : null}
-              <div className="rounded-xl border border-line p-3">
-                <p className="text-xs uppercase tracking-wide text-muted">Update logs</p>
-                <div className="mt-2 space-y-2">
-                  {(detailRow.updateLogs ?? []).map((log) => (
-                    <div key={log.id} className="rounded-lg border border-line bg-panel-muted p-2">
-                      <p className="text-xs text-muted">
-                        {formatDateTime(log.createdAt)} by {log.changedBy.name}
-                      </p>
-                    </div>
-                  ))}
-                  {!detailRow.updateLogs?.length ? <p className="text-sm text-muted">No update logs yet.</p> : null}
+              {user?.role !== "MEMBER" ? (
+                <div className="rounded-xl border border-line p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted">Update logs</p>
+                  <div className="mt-2 space-y-2">
+                    {(detailRow.updateLogs ?? []).map((log) => (
+                      <div key={log.id} className="rounded-lg border border-line bg-panel-muted p-2">
+                        <p className="text-xs text-muted">
+                          {formatDateTime(log.createdAt)} by {log.changedBy.name}
+                        </p>
+                      </div>
+                    ))}
+                    {!detailRow.updateLogs?.length ? <p className="text-sm text-muted">No update logs yet.</p> : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {paymentOpen && detailRow ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-ink/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setPaymentOpen(false);
+              setEditingPaymentId(null);
+            }
+          }}
+        >
+          <div className="surface w-full max-w-lg p-4">
+            <h4 className="text-base font-semibold">Record payment</h4>
+            <p className="mt-1 text-xs text-muted">{detailRow.itemName}</p>
+            <div className="mt-3 grid gap-3">
+              <label className="label block">
+                Amount
+                <input
+                  className="input-base mt-1 w-full"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Date
+                <input
+                  className="input-base mt-1 w-full"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Method
+                <input
+                  className="input-base mt-1 w-full"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Invoice upload (optional)
+                <input
+                  className="input-base mt-1 w-full"
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => setPaymentInvoiceFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <label className="label block">
+                Note
+                <textarea className="input-base mt-1 w-full" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} />
+              </label>
+            </div>
+            {paymentUiError ? <p className="mt-2 text-sm text-red-600">{paymentUiError}</p> : null}
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setPaymentOpen(false);
+                  setEditingPaymentId(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={addPaymentMutation.isPending}
+                onClick={() => {
+                  const amount = Number(paymentAmount);
+                  if (!Number.isFinite(amount) || amount <= 0) {
+                    setPaymentUiError("Enter a valid amount greater than 0.");
+                    return;
+                  }
+                  setPaymentUiError("");
+                  const payload = {
+                    requirementId: detailRow.id,
+                    amount,
+                    method: paymentMethod,
+                    note: paymentNote,
+                    paidAt: paymentDate ? new Date(paymentDate).toISOString() : undefined,
+                  };
+                  if (editingPaymentId) {
+                    api
+                      .patch<RequirementRow>(`/requirements/payments/${editingPaymentId}`, {
+                        amount: payload.amount,
+                        method: payload.method || undefined,
+                        note: payload.note || undefined,
+                        paidAt: payload.paidAt,
+                      })
+                      .then(async (updated) => {
+                        setDetailRow(updated);
+                        setPaymentOpen(false);
+                        setEditingPaymentId(null);
+                        setPaymentAmount("");
+                        setPaymentMethod("");
+                        setPaymentNote("");
+                        setPaymentDate(new Date().toISOString().slice(0, 10));
+                        setPaymentInvoiceFile(null);
+                        await Promise.all([
+                          qc.invalidateQueries({ queryKey: ["requirements"] }),
+                          qc.invalidateQueries({ queryKey: ["dashboard"] }),
+                        ]);
+                      })
+                      .catch((err) => {
+                        setPaymentUiError(err instanceof Error ? err.message : "Could not update payment.");
+                      });
+                    return;
+                  }
+                  addPaymentMutation.mutate(
+                    {
+                      requirementId: payload.requirementId,
+                      amount: payload.amount,
+                      method: payload.method,
+                      note: payload.note,
+                      paidAt: payload.paidAt,
+                    },
+                    {
+                      onSuccess: async (updated) => {
+                        if (paymentInvoiceFile) {
+                          const form = new FormData();
+                          form.append("file", paymentInvoiceFile);
+                          const withInvoice = await api.postMultipart<RequirementRow>(
+                            `/requirements/${updated.id}/invoice`,
+                            form,
+                          );
+                          setDetailRow(withInvoice);
+                          await Promise.all([
+                            qc.invalidateQueries({ queryKey: ["requirements"] }),
+                            qc.invalidateQueries({ queryKey: ["dashboard"] }),
+                          ]);
+                        }
+                      },
+                    },
+                  );
+                }}
+              >
+                {addPaymentMutation.isPending ? "Saving..." : editingPaymentId ? "Update payment" : "Save payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-ink/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setCreateOpen(false);
+          }}
+        >
+          <div className="surface w-full max-w-2xl p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-base font-semibold">Add expense</h4>
+              <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="label block">
+                Vendor
+                <AppSelect
+                  value={vendorIdDraft}
+                  onChange={setVendorIdDraft}
+                  options={[
+                    { value: "", label: "Select vendor" },
+                    ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
+                  ]}
+                />
+              </label>
+              <label className="label block">
+                Site
+                <AppSelect
+                  value={siteIdDraft}
+                  onChange={setSiteIdDraft}
+                  options={[
+                    { value: "", label: "Select site" },
+                    ...(sitesQ.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
+              </label>
+              <label className="label block sm:col-span-2">
+                Item name
+                <input
+                  className="input-base mt-1 w-full"
+                  value={itemNameDraft}
+                  onChange={(e) => setItemNameDraft(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Brand
+                <input className="input-base mt-1 w-full" value={brandDraft} onChange={(e) => setBrandDraft(e.target.value)} />
+              </label>
+              <label className="label block">
+                Quantity
+                <input className="input-base mt-1 w-full" value={qtyDraft} onChange={(e) => setQtyDraft(e.target.value)} />
+              </label>
+              <label className="label block">
+                Total amount
+                <input className="input-base mt-1 w-full" value={totalDraft} onChange={(e) => setTotalDraft(e.target.value)} />
+              </label>
+              <label className="label block">
+                Entry date
+                <input
+                  type="date"
+                  className="input-base mt-1 w-full"
+                  value={entryDateDraft}
+                  onChange={(e) => setEntryDateDraft(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Initial payment (optional)
+                <input
+                  className="input-base mt-1 w-full"
+                  value={payAmountDraft}
+                  onChange={(e) => setPayAmountDraft(e.target.value)}
+                />
+              </label>
+              <label className="label block">
+                Invoice file (optional)
+                <input ref={invoiceInputRef} type="file" accept="application/pdf,image/*" className="input-base mt-1 w-full" />
+              </label>
+            </div>
+            {createStatus ? <p className="mt-3 text-sm text-[#7C7266]">{createStatus}</p> : null}
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={
+                  createMutation.isPending ||
+                  !vendorIdDraft ||
+                  !siteIdDraft ||
+                  !itemNameDraft.trim() ||
+                  !totalDraft
+                }
+                onClick={() => createMutation.mutate()}
+              >
+                {createMutation.isPending ? "Saving..." : "Save expense"}
+              </button>
             </div>
           </div>
         </div>
@@ -589,43 +1076,6 @@ function fmtDate(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function getPresetRange(preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth"): DateRange {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  if (preset === "today") return { from: today, to: today };
-  if (preset === "yesterday") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    return { from: y, to: y };
-  }
-  if (preset === "week") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { from: start, to: today };
-  }
-  if (preset === "thisMonth") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { from: start, to: end };
-  }
-  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const end = new Date(today.getFullYear(), today.getMonth(), 0);
-  return { from: start, to: end };
-}
-
-function PresetItem({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[#3C352D] transition hover:bg-[#F8F5EF]"
-    >
-      {label}
-    </button>
-  );
 }
 
 function formatDisplayDate(value: string) {
@@ -650,15 +1100,6 @@ function formatDateTime(value: string) {
     hour12: false,
     timeZone: "UTC",
   }).format(d);
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="label block">
-      {label}
-      {children}
-    </label>
-  );
 }
 
 function Info({ label, value }: { label: string; value: string }) {

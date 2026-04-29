@@ -3,7 +3,7 @@
 import { useAuthStore } from "@/features/auth/auth.store";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type NavItem = {
   href: string;
@@ -65,6 +65,18 @@ const nav: readonly NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: "/sites",
+    label: "Sites",
+    icon: (
+      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+        <path
+          fill="currentColor"
+          d="M10 2 3 7v10a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1V7l-7-5Zm0 2.45L15 8v8h-1v-5a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v5H5V8l5-3.55Z"
+        />
+      </svg>
+    ),
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -74,10 +86,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const [mounted, setMounted] = useState(false);
-  const pageTitle = useMemo(
-    () => nav.find((item) => path === item.href || path.startsWith(`${item.href}/`))?.label ?? "Dashboard",
-    [path],
-  );
 
   useEffect(() => {
     setMounted(true);
@@ -137,27 +145,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-[#E5DED3] bg-[#F6F3EE]/95 backdrop-blur">
-          <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5 lg:px-8">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-[#857B6E]">Overview</p>
-              <h1 className="text-xl font-semibold tracking-tight text-[#2A2A2A]">{pageTitle}</h1>
-            </div>
-            <div className="hidden w-full max-w-md items-center rounded-2xl border border-[#E5DED3] bg-white px-3.5 py-2.5 md:flex">
-              <svg aria-hidden="true" viewBox="0 0 20 20" className="mr-2 h-4 w-4 text-[#8B8173]">
-                <path
-                  fill="currentColor"
-                  d="M8.5 2a6.5 6.5 0 0 1 5.18 10.44l3.94 3.94a1 1 0 0 1-1.42 1.42l-3.94-3.94A6.5 6.5 0 1 1 8.5 2Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"
-                />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search users, vendors, reports..."
-                className="w-full bg-transparent text-sm text-[#2A2A2A] outline-none placeholder:text-[#9A9083]"
-              />
-            </div>
-          </div>
-        </header>
         <main className="px-4 py-6 sm:px-5 lg:px-8 lg:py-8">{children}</main>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[#E5DED3] bg-white/95 px-2 py-2 backdrop-blur lg:hidden">

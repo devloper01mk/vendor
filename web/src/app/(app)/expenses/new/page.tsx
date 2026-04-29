@@ -11,6 +11,7 @@ import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 export default function NewExpensePage() {
@@ -88,6 +89,21 @@ export default function NewExpensePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
+        <div className="mb-3 flex items-center justify-between">
+          <Link
+            href="/expenses"
+            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-3 py-1.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
+          >
+            Back
+          </Link>
+          <button
+            type="button"
+            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-3 py-1.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
+            onClick={() => router.push("/expenses")}
+          >
+            Close
+          </button>
+        </div>
         <h1 className="text-3xl font-semibold tracking-tight">New transaction</h1>
         <p className="mt-1 text-sm text-muted">Requirement, optional payment, optional invoice</p>
       </div>

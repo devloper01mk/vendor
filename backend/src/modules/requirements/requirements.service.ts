@@ -9,6 +9,7 @@ import {
 } from "./dto/list-requirements.query.dto";
 import { ToggleHighlightDto } from "./dto/toggle-highlight.dto";
 import { UpdateRequirementDto } from "./dto/update-requirement.dto";
+import { UpdateRequirementPaymentDto } from "./dto/update-requirement-payment.dto";
 import type { RequestUser } from "../../common/decorators/current-user.decorator";
 
 type InvoiceFileMeta = {
@@ -396,6 +397,7 @@ export class RequirementsService {
         requirementId,
         recordedById: user.sub,
         amount,
+        paidAt: dto.paidAt ? new Date(dto.paidAt) : undefined,
         method: dto.method,
         note: dto.note,
       },
@@ -414,6 +416,47 @@ export class RequirementsService {
     }
 
     return this.getOne(requirementId, { sub: user.sub, role: user.role, email: user.email });
+  }
+
+  async updatePayment(paymentId: string, user: RequestUser, dto: UpdateRequirementPaymentDto) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        requirement: true,
+      },
+    });
+    if (!payment) throw new NotFoundException("Payment not found");
+
+    if (user.role === "MEMBER" && payment.requirement.createdById !== user.sub) {
+      throw new ForbiddenException("You can only update payments for your own entries");
+    }
+
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        amount: new Prisma.Decimal(dto.amount),
+        paidAt: dto.paidAt ? new Date(dto.paidAt) : undefined,
+        method: dto.method !== undefined ? dto.method : undefined,
+        note: dto.note !== undefined ? dto.note : undefined,
+      },
+    });
+
+    const req = await this.prisma.requirement.findUnique({
+      where: { id: payment.requirementId },
+      include: { payments: true },
+    });
+    if (req) {
+      const paid = this.sumPayments(req.payments);
+      const isComplete =
+        paid.sub(req.totalAmount).abs().lte(new Prisma.Decimal("0.01")) ||
+        paid.gte(req.totalAmount);
+      await this.prisma.requirement.update({
+        where: { id: req.id },
+        data: { status: isComplete ? RequirementStatus.COMPLETED : RequirementStatus.PENDING },
+      });
+    }
+
+    return this.getOne(payment.requirementId, { sub: user.sub, role: user.role, email: user.email });
   }
 
   async attachInvoice(

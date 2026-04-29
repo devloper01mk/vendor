@@ -2,6 +2,7 @@
 
 import type { DashboardSummary } from "@/features/expenses/types";
 import { useApi } from "@/core/use-api";
+import { useAuthStore } from "@/features/auth/auth.store";
 import { useQuery } from "@tanstack/react-query";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/style.css";
@@ -9,6 +10,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function DashboardPage() {
   const api = useApi();
+  const user = useAuthStore((s) => s.user);
+  const isAdminView = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [draftRange, setDraftRange] = useState<DateRange | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -177,26 +180,58 @@ export default function DashboardPage() {
         <Metric label="Total paid" value={d.totals.paid} tone="positive" />
         <Metric label="Pending exposure" value={d.totals.pending} tone="negative" />
         <Metric label="Total committed" value={d.totals.committed} tone="neutral" />
-        <Metric label="Paid to users" value={d.userFunding?.paidToUsers ?? "0"} tone="neutral" />
+        {isAdminView ? (
+          <Metric label="Paid to users" value={d.userFunding?.paidToUsers ?? "0"} tone="neutral" />
+        ) : (
+          <Metric label="Tracked items" value={String(d.requirementsTracked ?? 0)} tone="neutral" />
+        )}
       </div>
 
+      {!isAdminView && d.memberWallet ? (
+        <section className="surface p-4">
+          <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Member wallet</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Metric label="Received from admin" value={d.memberWallet.received} tone="neutral" />
+            <Metric label="Spent to vendors" value={d.memberWallet.spent} tone="positive" />
+            <Metric label="Available balance" value={d.memberWallet.balance} tone="negative" />
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid gap-6 xl:grid-cols-2">
-        <div className="space-y-6">
+        {isAdminView ? (
+          <div className="space-y-6">
+            <div className="surface p-4">
+              <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Pending by vendor</h2>
+              <ul className="divide-y divide-[#EEE7DD] rounded-xl border border-[#E5DED3]">
+                {d.vendorPending.map((v) => (
+                  <li key={v.vendorId} className="flex items-center justify-between px-4 py-3 text-sm">
+                    <span>{v.name}</span>
+                    <span className="tabular-nums tone-negative">{v.pending}</span>
+                  </li>
+                ))}
+                {!d.vendorPending.length ? (
+                  <li className="px-4 py-6 text-center text-sm text-[#8A8072]">No pending rows</li>
+                ) : null}
+              </ul>
+            </div>
+          </div>
+        ) : (
           <div className="surface p-4">
-            <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Pending by vendor</h2>
-            <ul className="divide-y divide-[#EEE7DD] rounded-xl border border-[#E5DED3]">
-              {d.vendorPending.map((v) => (
-                <li key={v.vendorId} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <span>{v.name}</span>
-                  <span className="tabular-nums tone-negative">{v.pending}</span>
+            <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Needs attention</h2>
+            <ul className="space-y-2">
+              {(d.highlighted ?? []).slice(0, 8).map((h) => (
+                <li key={h.requirementId} className="rounded-xl border border-[#E5DED3] bg-[#FAF7F2] px-4 py-3 text-sm">
+                  <p className="font-medium">{h.itemName}</p>
+                  <p className="mt-1 text-xs text-[#8A8072]">
+                    {h.vendorName} · {h.siteName}
+                  </p>
                 </li>
               ))}
-              {!d.vendorPending.length ? (
-                <li className="px-4 py-6 text-center text-sm text-[#8A8072]">No pending rows</li>
-              ) : null}
+              {!d.highlighted?.length ? <li className="text-sm text-[#8A8072]">No highlighted items right now.</li> : null}
             </ul>
           </div>
-        </div>
+        )}
 
         <div className="surface p-4">
           <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Paid by site</h2>
@@ -214,21 +249,23 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="surface p-4">
-        <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Alerts and exceptions</h2>
-        <ul className="space-y-2">
-          {d.alerts.slice(0, 8).map((a) => (
-            <li
-              key={`${a.type}-${a.requirementId}`}
-              className="rounded-xl border border-[#E5DED3] bg-[#FAF7F2] px-4 py-3 text-sm"
-            >
-              <span className="text-xs uppercase tracking-wide text-[#8A8072]">{a.type}</span>
-              <p className="mt-1">{a.message}</p>
-            </li>
-          ))}
-          {!d.alerts.length ? <li className="text-sm text-[#8A8072]">No alerts right now.</li> : null}
-        </ul>
-      </section>
+      {isAdminView ? (
+        <section className="surface p-4">
+          <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Alerts and exceptions</h2>
+          <ul className="space-y-2">
+            {d.alerts.slice(0, 8).map((a) => (
+              <li
+                key={`${a.type}-${a.requirementId}`}
+                className="rounded-xl border border-[#E5DED3] bg-[#FAF7F2] px-4 py-3 text-sm"
+              >
+                <span className="text-xs uppercase tracking-wide text-[#8A8072]">{a.type}</span>
+                <p className="mt-1">{a.message}</p>
+              </li>
+            ))}
+            {!d.alerts.length ? <li className="text-sm text-[#8A8072]">No alerts right now.</li> : null}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

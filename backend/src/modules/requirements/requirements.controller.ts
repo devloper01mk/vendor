@@ -27,6 +27,7 @@ import { CreateRequirementDto } from "./dto/create-requirement.dto";
 import { ListRequirementsQueryDto } from "./dto/list-requirements.query.dto";
 import { ToggleHighlightDto } from "./dto/toggle-highlight.dto";
 import { UpdateRequirementDto } from "./dto/update-requirement.dto";
+import { UpdateRequirementPaymentDto } from "./dto/update-requirement-payment.dto";
 import { RequirementsService } from "./requirements.service";
 
 const invoiceStorage = diskStorage({
@@ -97,6 +98,16 @@ export class RequirementsController {
     @Body() body: AddPaymentDto,
   ) {
     return this.requirements.addPayment(id, user, body);
+  }
+
+  @Patch("payments/:paymentId")
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNT_HEAD, UserRole.MEMBER)
+  updatePayment(
+    @Param("paymentId") paymentId: string,
+    @CurrentUser() user: RequestUser,
+    @Body() body: UpdateRequirementPaymentDto,
+  ) {
+    return this.requirements.updatePayment(paymentId, user, body);
   }
 
   @Post(":id/invoice")

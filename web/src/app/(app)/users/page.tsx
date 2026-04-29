@@ -5,7 +5,8 @@ import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type UserRow = { id: string; email: string; name: string; role: string; isBlocked: boolean; createdAt: string };
 type UserPaymentRow = {
@@ -58,6 +59,11 @@ export default function UsersPage() {
   const qc = useQueryClient();
   const authUser = useAuthStore((s) => s.user);
   const canManageUsers = authUser?.role === "ADMIN" || authUser?.role === "ACCOUNT_HEAD";
+  const router = useRouter();
+  useEffect(() => {
+    if (!canManageUsers) router.replace("/dashboard");
+  }, [canManageUsers, router]);
+
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -82,6 +88,7 @@ export default function UsersPage() {
   const q = useQuery({
     queryKey: ["users"],
     queryFn: () => api.get<UserRow[]>("/users"),
+    enabled: canManageUsers,
   });
 
   const setBlocked = useMutation({
@@ -197,6 +204,10 @@ export default function UsersPage() {
     if (!paymentQ.isError) return "";
     return errorMessage(paymentQ.error);
   }, [paymentQ.error, paymentQ.isError]);
+
+  if (!canManageUsers) {
+    return null;
+  }
 
   if (q.isLoading) return <p className="text-sm text-muted">Loading users…</p>;
   if (q.isError) {
