@@ -8,6 +8,7 @@ import { SitesModule } from "./modules/sites/sites.module";
 import { RequirementsModule } from "./modules/requirements/requirements.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ImportModule } from "./modules/import/import.module";
+import { InvestorsModule } from "./modules/investors/investors.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ImportModule } from "./modules/import/import.module";
     RequirementsModule,
     DashboardModule,
     ImportModule,
+    InvestorsModule,
   ],
 })
 export class AppModule {}

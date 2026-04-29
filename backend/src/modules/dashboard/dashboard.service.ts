@@ -123,6 +123,19 @@ export class DashboardService {
       select: { amount: true },
     });
     const totalPaidToUsers = paidToUsersRows.reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
+    const investorRows = await this.prisma.investorEntry.findMany({
+      where:
+        from || to
+          ? {
+              paymentReceivedDate: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : undefined,
+      select: { amount: true },
+    });
+    const totalInvestorReceived = investorRows.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0));
 
     let receivedFromAdmin = new Prisma.Decimal(0);
     if (user.role === "MEMBER") {
@@ -148,6 +161,9 @@ export class DashboardService {
       },
       userFunding: {
         paidToUsers: totalPaidToUsers.toString(),
+      },
+      investor: {
+        totalReceived: totalInvestorReceived.toString(),
       },
       memberWallet:
         user.role === "MEMBER"

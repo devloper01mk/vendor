@@ -43,6 +43,7 @@ export type RequirementRow = {
 export type DashboardSummary = {
   totals: { committed: string; paid: string; pending: string };
   userFunding?: { paidToUsers: string };
+  investor?: { totalReceived: string };
   memberWallet?: { received: string; spent: string; balance: string } | null;
   vendorPending: { vendorId: string; name: string; pending: string }[];
   siteSpend: { siteId: string; name: string; paid: string }[];

@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS "invoices" CASCADE;
 DROP TABLE IF EXISTS "payments" CASCADE;
 DROP TABLE IF EXISTS "requirement_update_logs" CASCADE;
 DROP TABLE IF EXISTS "requirements" CASCADE;
+DROP TABLE IF EXISTS "investor_entries" CASCADE;
 DROP TABLE IF EXISTS "vendors" CASCADE;
 DROP TABLE IF EXISTS "sites" CASCADE;
 DROP TABLE IF EXISTS "users" CASCADE;
@@ -143,3 +144,24 @@ CREATE TABLE "invoices" (
   CONSTRAINT "invoices_uploaded_by_id_fkey"
     FOREIGN KEY ("uploaded_by_id") REFERENCES "users" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+CREATE TABLE "investor_entries" (
+  "id"                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name"                  TEXT NOT NULL,
+  "amount"                DECIMAL(18, 2) NOT NULL,
+  "date"                  DATE NOT NULL,
+  "payment_received_date" DATE NOT NULL,
+  "payment_mode"          TEXT NOT NULL,
+  "note"                  TEXT,
+  "created_by_id"         UUID,
+  "created_at"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT "investor_entries_created_by_id_fkey"
+    FOREIGN KEY ("created_by_id") REFERENCES "users" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE INDEX "investor_entries_name_idx" ON "investor_entries" ("name");
+CREATE INDEX "investor_entries_date_idx" ON "investor_entries" ("date");
+CREATE INDEX "investor_entries_payment_received_date_idx" ON "investor_entries" ("payment_received_date");
+CREATE INDEX "investor_entries_created_by_id_idx" ON "investor_entries" ("created_by_id");

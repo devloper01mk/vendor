@@ -522,6 +522,7 @@ export default function ExpensesPage() {
               <th className="px-4 py-3 font-medium">Site</th>
               <th className="px-4 py-3 font-medium">Entry User</th>
               <th className="px-4 py-3 font-medium">Total</th>
+              <th className="px-4 py-3 font-medium">Paid</th>
               <th className="px-4 py-3 font-medium">Due</th>
             </tr>
           </thead>
@@ -543,6 +544,7 @@ export default function ExpensesPage() {
                 <td className="px-4 py-3">{r.site.name}</td>
                 <td className="px-4 py-3 text-[#6F6659]">{r.createdBy.name}</td>
                 <td className="px-4 py-3 tabular-nums tone-positive">{r.totalAmount}</td>
+                <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{r.paidTotal}</td>
                 <td className="px-4 py-3 tabular-nums tone-negative">{r.remaining}</td>
               </tr>
             ))}

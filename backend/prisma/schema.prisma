@@ -164,9 +164,30 @@ model User {
   requirementUpdateLogs RequirementUpdateLog[] @relation("RequirementLogChangedBy")
   paymentsRecorded    Payment[]
   invoicesUploaded    Invoice[]
+  investorEntries     InvestorEntry[] @relation("InvestorEntryCreatedBy")
 
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@map("users")
+}
+
+model InvestorEntry {
+  id                  String   @id @default(uuid())
+  name                String
+  amount              Decimal  @db.Decimal(18, 2)
+  date                DateTime @db.Date
+  paymentReceivedDate DateTime @map("payment_received_date") @db.Date
+  paymentMode         String   @map("payment_mode")
+  note                String?
+  createdById         String?  @map("created_by_id")
+  createdBy           User?    @relation("InvestorEntryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([date])
+  @@index([paymentReceivedDate])
+  @@index([createdById])
+  @@map("investor_entries")
 }

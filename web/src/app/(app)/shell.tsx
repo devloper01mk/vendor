@@ -54,6 +54,19 @@ const nav: readonly NavItem[] = [
     ),
   },
   {
+    href: "/investor",
+    label: "Investor",
+    roles: ["ADMIN"],
+    icon: (
+      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+        <path
+          fill="currentColor"
+          d="M3 15h14v2H3v-2Zm1-2 2.4-7.2A1 1 0 0 1 7.35 5h5.3a1 1 0 0 1 .95.68L16 13h-2.1l-1.9-6H7.98l-1.88 6H4Z"
+        />
+      </svg>
+    ),
+  },
+  {
     href: "/vendors",
     label: "Vendors",
     icon: (
@@ -105,8 +118,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             RK
           </span>
           <div>
-            <p className="text-sm font-semibold tracking-wide text-[#F5EEE1]">Reckon</p>
-            <p className="text-xs text-[#B8B1A6]">Workspace</p>
+            <p className="text-base font-semibold tracking-wide text-[#F5EEE1]">Reckon</p>
+            <p className="text-sm text-[#B8B1A6]">Workspace</p>
           </div>
         </div>
         <nav className="space-y-1">
@@ -118,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-base transition ${
                     active ? "bg-[#1F1F1F] text-[#F5EEE1]" : "text-[#B8B1A6] hover:bg-[#1F1F1F] hover:text-[#F5EEE1]"
                   }`}
                 >
@@ -129,12 +142,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
         </nav>
         <div className="mt-auto rounded-xl border border-[#2A2A2A] bg-[#1B1B1B] p-3">
-          <p className="text-xs uppercase tracking-wide text-[#A89F93]">Signed in</p>
-          <p className="mt-1 text-sm font-medium text-[#F5EEE1]">{user?.name}</p>
-          <p className="text-xs text-[#A89F93]">{user?.role}</p>
+          <p className="text-sm uppercase tracking-wide text-[#A89F93]">Signed in</p>
+          <p className="mt-1 text-base font-medium text-[#F5EEE1]">{user?.name}</p>
+          <p className="text-sm text-[#A89F93]">{user?.role}</p>
           <button
             type="button"
-            className="mt-3 inline-flex rounded-lg border border-[#2F2F2F] px-3 py-1.5 text-xs text-[#D5CCBF] transition hover:bg-[#1F1F1F]"
+            className="mt-3 inline-flex rounded-lg border border-[#2F2F2F] px-3 py-1.5 text-sm text-[#D5CCBF] transition hover:bg-[#1F1F1F]"
             onClick={() => {
               logout();
               router.replace("/login");

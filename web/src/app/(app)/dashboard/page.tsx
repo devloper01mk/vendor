@@ -176,15 +176,16 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Total paid" value={d.totals.paid} tone="positive" />
         <Metric label="Pending exposure" value={d.totals.pending} tone="negative" />
-        <Metric label="Total committed" value={d.totals.committed} tone="neutral" />
+        <Metric label="Total" value={d.totals.committed} tone="neutral" />
         {isAdminView ? (
           <Metric label="Paid to users" value={d.userFunding?.paidToUsers ?? "0"} tone="neutral" />
         ) : (
           <Metric label="Tracked items" value={String(d.requirementsTracked ?? 0)} tone="neutral" />
         )}
+        {isAdminView ? <Metric label="Total Investment" value={d.investor?.totalReceived ?? "0"} tone="neutral" /> : null}
       </div>
 
       {!isAdminView && d.memberWallet ? (
