@@ -22,6 +22,8 @@ export type RequirementRow = {
   payments: {
     id: string;
     amount: string;
+    method?: string | null;
+    note?: string | null;
     paidAt: string;
     recordedBy: { id: string; name: string };
   }[];
