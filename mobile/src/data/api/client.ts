@@ -9,6 +9,21 @@ export class ApiError extends Error {
 
 export function createApi(getToken: () => string | null) {
   const REQUEST_TIMEOUT_MS = 12000;
+  function safePreview(value: unknown, limit = 1200) {
+    if (value === undefined) return undefined;
+    try {
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      return text.length > limit ? `${text.slice(0, limit)}...<truncated>` : text;
+    } catch {
+      return "<unserializable>";
+    }
+  }
+
+  function logApi(stage: string, details: Record<string, unknown>) {
+    // Keep API diagnostics centralized for all mobile requests.
+    console.log(`[API ${stage}]`, details);
+  }
+
   function buildUrl(path: string, query?: Record<string, string | undefined>) {
     const base = path.startsWith("http") ? path : `${config.apiUrl}${path}`;
     if (!query) return base;
@@ -28,6 +43,7 @@ export function createApi(getToken: () => string | null) {
   ): Promise<T> {
     const url = buildUrl(path, opts?.query);
     const token = getToken();
+    const startedAt = Date.now();
     const headers: Record<string, string> = {
       Accept: "application/json",
       "x-client-platform": "mobile",
@@ -38,6 +54,13 @@ export function createApi(getToken: () => string | null) {
       headers["Content-Type"] = "application/json";
       body = JSON.stringify(opts.body);
     }
+    logApi("REQUEST", {
+      method,
+      url,
+      query: opts?.query,
+      headers: { ...headers, Authorization: token ? "Bearer <redacted>" : undefined },
+      body: safePreview(opts?.body),
+    });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     let res: Response;
@@ -49,22 +72,46 @@ export function createApi(getToken: () => string | null) {
         error !== null &&
         "name" in error &&
         (error as { name?: string }).name === "AbortError";
+      logApi("NETWORK_ERROR", {
+        method,
+        url,
+        durationMs: Date.now() - startedAt,
+        isTimeout,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw new ApiError(isTimeout ? "Request timed out. Check backend connection." : "Unable to reach server.", 0);
     } finally {
       clearTimeout(timeout);
     }
     if (res.status === 204) return undefined as T;
+    const raw = await res.text();
+    let parsed: unknown = undefined;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = raw;
+      }
+    }
+
+    logApi("RESPONSE", {
+      method,
+      url,
+      status: res.status,
+      ok: res.ok,
+      durationMs: Date.now() - startedAt,
+      body: safePreview(parsed),
+    });
+
     if (!res.ok) {
       let msg = res.statusText;
-      try {
-        const j = (await res.json()) as { message?: unknown };
-        if (typeof j.message === "string") msg = j.message;
-      } catch {
-        /* ignore */
+      if (parsed && typeof parsed === "object" && "message" in parsed) {
+        const maybeMessage = (parsed as { message?: unknown }).message;
+        if (typeof maybeMessage === "string") msg = maybeMessage;
       }
       throw new ApiError(msg, res.status);
     }
-    return (await res.json()) as T;
+    return parsed as T;
   }
 
   return {

@@ -1,14 +1,13 @@
-import { NativeModules, Platform } from "react-native";
+import { NativeModules } from "react-native";
 
 /**
  * API base URL for the Nest backend.
- * - Android emulator: use 10.0.2.2 (not localhost)
- * - iOS simulator: localhost works
- * - Physical device: set your machine's LAN IP, e.g. http://192.168.1.5:4000
- *
- * Optional: start Metro with API_URL override (see babel inline env or .env tooling).
+ * - Dev default is localhost:4000.
+ * - Android devices rely on adb reverse (configured in run-from-package script).
+ * - Override MANUAL_DEV_API_HOST for LAN testing if needed.
  */
-const MANUAL_DEV_API_HOST = "";
+const MANUAL_DEV_API_URL = "https://api.reckon.cronberry.com";
+const MANUAL_DEV_API_HOST = "localhost";
 
 function getMetroHost() {
   if (!__DEV__) return null;
@@ -22,16 +21,16 @@ function getMetroHost() {
   }
 }
 
-const defaultHost = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+const defaultHost = "localhost";
 const detectedHost = getMetroHost();
 const normalizedDetectedHost = detectedHost?.replace(/^\[|\]$/g, "") ?? null;
-const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0", "10.0.2.2"]);
 const apiHost =
   MANUAL_DEV_API_HOST.trim() ||
-  (normalizedDetectedHost && !loopbackHosts.has(normalizedDetectedHost) ? normalizedDetectedHost : defaultHost);
+  normalizedDetectedHost ||
+  defaultHost;
 
 export const config = {
-  apiUrl: `http://${apiHost}:4000`,
+  apiUrl: __DEV__ ? MANUAL_DEV_API_URL.trim() || `http://${apiHost}:4000` : "https://api.reckon.cronberry.com",
   // Google OAuth Web client ID (required for Google Sign-In idToken on mobile)
   googleWebClientId: "",
 } as const;

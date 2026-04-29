@@ -12,6 +12,13 @@
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/react_codegen_RNGoogleSignInCGen.dir/react/renderer/components/RNGoogleSignInCGen/RNGoogleSignInCGenJSI-generated.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/react_codegen_RNGoogleSignInCGen.dir/react/renderer/components/RNGoogleSignInCGen/ShadowNodes.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/react_codegen_RNGoogleSignInCGen.dir/react/renderer/components/RNGoogleSignInCGen/States.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/VectorIconsIonicons-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/ComponentDescriptors.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/EventEmitters.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/Props.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/ShadowNodes.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/States.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir/react/renderer/components/VectorIconsIonicons/VectorIconsIoniconsJSI-generated.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/react/renderer/components/rndocumentpicker/ComponentDescriptors.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/react/renderer/components/rndocumentpicker/EventEmitters.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir/react/renderer/components/rndocumentpicker/Props.cpp.o

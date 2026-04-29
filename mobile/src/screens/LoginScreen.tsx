@@ -72,53 +72,6 @@ export function LoginScreen() {
     }
   }
 
-  async function onGoogleLogin() {
-    setErr(null);
-    setInfo(null);
-    setBusy(true);
-    try {
-      if (!config.googleWebClientId) {
-        setErr("Google login is not configured");
-        return;
-      }
-
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.data?.idToken;
-      if (!idToken) {
-        setErr("Google did not return an ID token");
-        return;
-      }
-
-      const api = createApi(() => null);
-      const res = await api.post<{
-        accessToken: string;
-        user: { id: string; email: string; name: string; role: string };
-      }>("/auth/google/token", { idToken });
-
-      if (res.user.role !== "MEMBER") {
-        logout();
-        setErr("Only user accounts can log in on mobile");
-        return;
-      }
-
-      setAuth(res.accessToken, {
-        id: res.user.id,
-        email: res.user.email,
-        name: res.user.name,
-        role: res.user.role,
-      });
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 0) {
-        setErr(error.message);
-      } else {
-        setErr("Google login failed");
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onForgotPassword() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {

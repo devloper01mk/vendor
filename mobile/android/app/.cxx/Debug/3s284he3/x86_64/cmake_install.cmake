@@ -46,6 +46,7 @@ if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/rnasyncstorage_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/RNGoogleSignInCGen_autolinked_build/cmake_install.cmake")
+  include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/VectorIconsIonicons_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/rndocumentpicker_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/RNImagePickerSpec_autolinked_build/cmake_install.cmake")
   include("/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86_64/safeareacontext_autolinked_build/cmake_install.cmake")

@@ -7,6 +7,9 @@
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/react_codegen_RNGoogleSignInCGen.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNGoogleSignInCGen_autolinked_build/CMakeFiles/rebuild_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/react_codegen_VectorIconsIonicons.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/VectorIconsIonicons_autolinked_build/CMakeFiles/rebuild_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/react_codegen_rndocumentpicker.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rndocumentpicker_autolinked_build/CMakeFiles/rebuild_cache.dir

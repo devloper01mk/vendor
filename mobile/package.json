@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "android": "react-native run-android",
-    "ios": "react-native run-ios",
-    "start": "react-native start",
+    "android": "node ./scripts/run-from-package.js react-native run-android --no-packager",
+    "android:with-packager": "node ./scripts/run-from-package.js react-native run-android",
+    "ios": "node ./scripts/run-from-package.js react-native run-ios",
+    "start": "node ./scripts/run-from-package.js react-native start",
     "lint": "eslint .",
     "test": "jest"
   },
@@ -13,6 +14,7 @@
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@react-native-community/datetimepicker": "^9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
+    "@react-native-vector-icons/ionicons": "^13.1.1",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
     "@react-navigation/native-stack": "^7.2.0",

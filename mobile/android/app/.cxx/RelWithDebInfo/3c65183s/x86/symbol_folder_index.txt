@@ -1,0 +1,1 @@
+/Users/manish/naman/mobile/android/app/build/intermediates/cxx/RelWithDebInfo/3c65183s/obj/x86

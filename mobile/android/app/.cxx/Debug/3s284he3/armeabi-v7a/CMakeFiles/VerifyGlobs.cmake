@@ -62,6 +62,31 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/armeabi-v7a/CMakeFiles/cmake.verify_globs")
 endif()
 
+# react_codegen_SRCS at /Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/CMakeLists.txt:9 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/*.cpp")
+set(OLD_GLOB
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/VectorIconsIonicons-generated.cpp"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/armeabi-v7a/CMakeFiles/cmake.verify_globs")
+endif()
+
+# react_codegen_SRCS at /Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/CMakeLists.txt:9 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/*.cpp")
+set(OLD_GLOB
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/ComponentDescriptors.cpp"
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/EventEmitters.cpp"
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/Props.cpp"
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/ShadowNodes.cpp"
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/States.cpp"
+  "/Users/manish/naman/mobile/node_modules/@react-native-vector-icons/ionicons/android/build/generated/source/codegen/jni/react/renderer/components/VectorIconsIonicons/VectorIconsIoniconsJSI-generated.cpp"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/armeabi-v7a/CMakeFiles/cmake.verify_globs")
+endif()
+
 # react_codegen_SRCS at /Users/manish/naman/mobile/node_modules/react-native-document-picker/android/build/generated/source/codegen/jni/CMakeLists.txt:9 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "/Users/manish/naman/mobile/node_modules/react-native-document-picker/android/build/generated/source/codegen/jni/*.cpp")
 set(OLD_GLOB

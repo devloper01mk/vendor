@@ -61,6 +61,16 @@ rule CXX_COMPILER__react_codegen_RNGoogleSignInCGen_Debug
 #############################################
 # Rule for compiling CXX files.
 
+rule CXX_COMPILER__react_codegen_VectorIconsIonicons_Debug
+  depfile = $DEP_FILE
+  deps = gcc
+  command = /Users/manish/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/Users/manish/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
+  description = Building CXX object $out
+
+
+#############################################
+# Rule for compiling CXX files.
+
 rule CXX_COMPILER__react_codegen_rndocumentpicker_Debug
   depfile = $DEP_FILE
   deps = gcc

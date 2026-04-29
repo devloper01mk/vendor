@@ -7,9 +7,12 @@ import { tokens } from "@/theme/tokens";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import DocumentPicker from "react-native-document-picker";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { config } from "@/core/config";
 
 type Tx = {
   id: string;
@@ -86,6 +89,8 @@ export function TransactionsScreen() {
   const [pickerDate, setPickerDate] = useState(new Date());
   const [typeFilter, setTypeFilter] = useState<"ALL" | "RECEIVED" | "SENT" | "PENDING">("ALL");
   const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const rangeLabel =
     rangeFilter === "ALL"
       ? "All"
@@ -97,18 +102,6 @@ export function TransactionsScreen() {
             ? "This month"
             : "Custom";
   const topRows = useMemo(() => rows.slice(0, 24), [rows]);
-
-  const totals = useMemo(() => {
-    let total = 0;
-    let paid = 0;
-    let due = 0;
-    for (const r of rows) {
-      total += Number(r.totalAmount || 0);
-      paid += Number(r.paidTotal || 0);
-      due += Number(r.remaining || 0);
-    }
-    return { total, paid, due };
-  }, [rows]);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -145,6 +138,83 @@ export function TransactionsScreen() {
 
   useFocusEffect(load);
 
+  const handleImport = useCallback(async () => {
+    if (!token) {
+      Alert.alert("Sign in required", "Please sign in again.");
+      return;
+    }
+    try {
+      const file = await DocumentPicker.pickSingle({
+        type: [
+          "text/csv",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          DocumentPicker.types.plainText,
+          DocumentPicker.types.allFiles,
+        ],
+      });
+      if (!file.uri) {
+        Alert.alert("Invalid file", "Please pick a valid spreadsheet file.");
+        return;
+      }
+      setImporting(true);
+      const form = new FormData();
+      form.append("file", {
+        uri: file.uri,
+        name: file.name || "transactions-import.xlsx",
+        type:
+          file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      } as never);
+
+      const res = await fetch(`${config.apiUrl}/import/spreadsheet`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "x-client-platform": "mobile",
+        },
+        body: form,
+      });
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+      if (!res.ok) {
+        const message = typeof payload?.message === "string" ? payload.message : "Import failed";
+        Alert.alert("Import failed", message);
+        return;
+      }
+      const imported = Number(payload?.imported || 0);
+      const errorCount = Array.isArray(payload?.errors) ? payload.errors.length : 0;
+      Alert.alert("Import completed", `Imported: ${imported}\nRow errors: ${errorCount}`);
+      load();
+    } catch (error) {
+      if (DocumentPicker.isCancel(error)) return;
+      Alert.alert("Import failed", "Unable to import file.");
+    } finally {
+      setImporting(false);
+    }
+  }, [token, load]);
+
+  const handleExport = useCallback(async () => {
+    if (!token) {
+      Alert.alert("Sign in required", "Please sign in again.");
+      return;
+    }
+    setExporting(true);
+    try {
+      const url = `${config.apiUrl}/import/spreadsheet/export?accessToken=${encodeURIComponent(token)}`;
+      await Linking.openURL(url);
+      Alert.alert("Export started", "Download opened in browser.");
+    } catch {
+      Alert.alert("Export failed", "Unable to start export.");
+    } finally {
+      setExporting(false);
+    }
+  }, [token]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -167,12 +237,12 @@ export function TransactionsScreen() {
           <View style={styles.head}>
             <View style={styles.topRow}>
               <Pressable style={styles.topIconBtn}>
-                <Text style={styles.topIcon}>☰</Text>
+                <Ionicons name="menu-outline" size={18} color={tokens.color.text} />
               </Pressable>
               <Text style={styles.topTitle}>Transactions</Text>
               <View style={styles.topRight}>
                 <Pressable style={styles.topIconBtn}>
-                  <Text style={styles.topIcon}>◌</Text>
+                  <Ionicons name="notifications-outline" size={16} color={tokens.color.text} />
                 </Pressable>
                 <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
                   <Text style={styles.avatarText}>AS</Text>
@@ -181,11 +251,11 @@ export function TransactionsScreen() {
             </View>
             <View style={styles.searchRow}>
               <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
+                <Ionicons name="search-outline" size={15} color={tokens.color.muted} />
                 <Text style={styles.searchText}>Search transactions...</Text>
               </View>
               <Pressable style={styles.filterBtn}>
-                <Text style={styles.filterBtnText}>≡</Text>
+                <Ionicons name="options-outline" size={14} color={tokens.color.text} />
               </Pressable>
             </View>
 
@@ -199,7 +269,7 @@ export function TransactionsScreen() {
             <View style={styles.tabRow}>
               <Pressable style={styles.typeDropdownBtn} onPress={() => setTypeFilterOpen(true)}>
                 <View style={styles.typeLeftWrap}>
-                  <Text style={styles.typeLeftIcon}>◌</Text>
+                  <Ionicons name="ellipse-outline" size={12} color="#8A7E68" />
                   <Text style={styles.typeDropdownText}>
                     {typeFilter === "ALL"
                       ? "All"
@@ -210,12 +280,26 @@ export function TransactionsScreen() {
                           : "Pending"}
                   </Text>
                 </View>
-                <Text style={styles.typeDropdownIcon}>▾</Text>
+                <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
               </Pressable>
               <Pressable style={styles.calendarDropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-                <Text style={styles.calendarIcon}>⌁</Text>
+                <Ionicons name="calendar-outline" size={12} color="#8A7E68" />
                 <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
-                <Text style={styles.typeDropdownIcon}>▾</Text>
+                <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
+              </Pressable>
+              <Pressable style={styles.actionIconBtn} onPress={handleImport} disabled={importing || exporting}>
+                {importing ? (
+                  <ActivityIndicator size="small" color={tokens.color.accent} />
+                ) : (
+                  <Ionicons name="download-outline" size={15} color="#5F5342" />
+                )}
+              </Pressable>
+              <Pressable style={styles.actionIconBtn} onPress={handleExport} disabled={importing || exporting}>
+                {exporting ? (
+                  <ActivityIndicator size="small" color={tokens.color.accent} />
+                ) : (
+                  <Ionicons name="share-outline" size={15} color="#5F5342" />
+                )}
               </Pressable>
             </View>
             {rangeFilter === "CUSTOM" ? (
@@ -271,7 +355,11 @@ export function TransactionsScreen() {
           return (
             <Pressable style={styles.txCard} onPress={() => navigation.navigate("Payment", { id: item.id })}>
               <View style={styles.txIconWrap}>
-                <Text style={[styles.txIcon, inbound ? styles.txIconPositive : styles.txIconNegative]}>{inbound ? "↓" : "↑"}</Text>
+                {inbound ? (
+                  <Ionicons name="arrow-down-outline" size={14} color="#2E7E59" />
+                ) : (
+                  <Ionicons name="arrow-up-outline" size={14} color="#B55050" />
+                )}
               </View>
               <View style={styles.txMiddle}>
                 <Text style={styles.txTitle} numberOfLines={1}>
@@ -294,7 +382,7 @@ export function TransactionsScreen() {
                     onPress={() => navigation.navigate("EditEntry", { id: item.id })}
                     hitSlop={8}
                   >
-                    <Text style={styles.editIcon}>✎</Text>
+                    <Ionicons name="pencil-outline" size={12} color={tokens.color.text} />
                   </Pressable>
                 ) : null}
               </View>
@@ -385,7 +473,6 @@ const styles = StyleSheet.create({
   bannerMsg: { color: tokens.color.muted, fontSize: tokens.textSize.caption, lineHeight: 18 },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topIconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  topIcon: { fontSize: 16, color: tokens.color.text },
   topTitle: { flex: 1, marginLeft: 8, fontSize: tokens.textSize.title, color: tokens.color.text, fontWeight: "600" },
   topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDE4D6", alignItems: "center", justifyContent: "center" },
@@ -402,7 +489,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
   },
-  searchIcon: { color: tokens.color.muted, marginRight: 8 },
   searchText: { color: "#A0927B", fontSize: 12 },
   filterBtn: {
     width: 42,
@@ -414,7 +500,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  filterBtnText: { color: tokens.color.text, fontSize: 14 },
   tabRow: { flexDirection: "row", gap: 10, alignItems: "center" },
   typeDropdownBtn: {
     height: 36,
@@ -429,9 +514,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   typeLeftWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  typeLeftIcon: { fontSize: 12, color: "#8A7E68" },
   typeDropdownText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
-  typeDropdownIcon: { fontSize: 12, color: tokens.color.muted },
   calendarDropdownBtn: {
     height: 36,
     minWidth: 126,
@@ -445,8 +528,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 6,
   },
-  calendarIcon: { fontSize: 12, color: "#8A7E68" },
   calendarDropdownText: { flex: 1, fontSize: 12, color: "#5F5342", fontWeight: "600" },
+  actionIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: tokens.radius.lg,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: tokens.color.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   positive: { color: tokens.color.positive },
   negative: { color: tokens.color.negative },
   dropdownWrap: {
@@ -511,7 +603,6 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.panelMuted,
   },
   editBtnPressed: { opacity: 0.85, backgroundColor: tokens.color.border },
-  editIcon: { fontSize: 12, color: tokens.color.text },
   txCard: {
     borderWidth: 1,
     borderColor: tokens.color.border,
@@ -530,9 +621,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#F4EFE7",
   },
-  txIcon: { fontSize: 14, fontWeight: "700" },
-  txIconPositive: { color: "#2E7E59" },
-  txIconNegative: { color: "#B55050" },
   txMiddle: { flex: 1 },
   txTitle: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
   txMeta: { fontSize: 11, color: tokens.color.muted, marginTop: 2 },

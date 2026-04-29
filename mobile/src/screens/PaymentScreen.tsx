@@ -1,4 +1,5 @@
 import { createApi } from "@/data/api/client";
+import { config } from "@/core/config";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -7,6 +8,7 @@ import { useAuthStore } from "@/features/auth/store";
 import { tokens } from "@/theme/tokens";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
+import DocumentPicker from "react-native-document-picker";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,6 +27,8 @@ type Detail = {
   invoice: { fileUrl: string; originalName: string } | null;
 };
 
+type InvoiceFile = { uri: string; type: string; name: string };
+
 type PaymentRoute = RouteProp<AuthedStackParamList, "Payment">;
 type HistoryFilter = "ALL" | "TODAY" | "WEEK" | "MONTH";
 
@@ -40,6 +44,7 @@ export function PaymentScreen() {
   const [paymentNote, setPaymentNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("ALL");
+  const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
 
   function numberOnly(s: string) {
     return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
@@ -80,13 +85,59 @@ export function PaymentScreen() {
     try {
       const api = createApi(() => token);
       await api.post(`/requirements/${id}/payments`, { amount, note: paymentNote.trim() || undefined });
+
+      if (invoiceFile) {
+        if (!token) throw new Error("Not signed in");
+        const formData = new FormData();
+        formData.append(
+          "file",
+          {
+            uri: invoiceFile.uri,
+            type: invoiceFile.type,
+            name: invoiceFile.name,
+          } as unknown as Blob,
+        );
+
+        const res = await fetch(`${config.apiUrl}/requirements/${id}/invoice`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "x-client-platform": "mobile",
+            Accept: "application/json",
+          },
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error("Invoice upload failed");
+        }
+      }
+
       await load();
       setPaymentAmount("");
       setPaymentNote("");
+      setInvoiceFile(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to add payment");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function pickInvoice() {
+    try {
+      const file = await DocumentPicker.pickSingle({
+        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+      });
+      if (!file.uri) return;
+      setInvoiceFile({
+        uri: file.uri,
+        type: file.type || "application/octet-stream",
+        name: file.name || "invoice",
+      });
+    } catch (e) {
+      if (DocumentPicker.isCancel(e)) return;
+      setErr("Failed to select invoice file");
     }
   }
 
@@ -160,7 +211,7 @@ export function PaymentScreen() {
           </Pressable>
         </CardContainer>
       ) : (
-        <Text style={styles.hint}>Invoice can be uploaded when editing the transaction.</Text>
+        <Text style={styles.hint}>You can optionally upload invoice while adding a payment.</Text>
       )}
 
       <CardContainer style={styles.block}>
@@ -181,6 +232,16 @@ export function PaymentScreen() {
           onChangeText={setPaymentNote}
           multiline
         />
+        <View style={styles.invoiceUploadRow}>
+          <Pressable
+            style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
+            onPress={pickInvoice}
+            disabled={saving}
+          >
+            <Text style={styles.linkBtnText}>{invoiceFile ? "Replace invoice" : "Upload invoice (optional)"}</Text>
+          </Pressable>
+          {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
+        </View>
         <PrimaryButton title="Save payment" onPress={addPayment} disabled={saving} loading={saving} />
       </CardContainer>
 
@@ -352,4 +413,6 @@ const styles = StyleSheet.create({
  },
   linkBtnText: { fontWeight: "600", color: tokens.color.accent, fontSize: tokens.textSize.small },
   pressed: { opacity: 0.88 },
+  invoiceUploadRow: { marginTop: tokens.space[1], gap: tokens.space[1] },
+  fileName: { fontSize: tokens.textSize.caption, color: tokens.color.muted },
 });
