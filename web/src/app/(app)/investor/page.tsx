@@ -60,6 +60,8 @@ export default function InvestorPage() {
     },
   });
 
+  const lastInvestorName = investorsQ.data?.[0]?.name ?? "";
+
   if (!canViewInvestor) return null;
 
   function handleAddInvestor() {
@@ -122,7 +124,7 @@ export default function InvestorPage() {
             onClick={() => {
               setCreateOpen(true);
               setUiError("");
-              setName("");
+              setName(lastInvestorName);
               setAmount("");
               setPaymentReceivedDate(new Date().toISOString().slice(0, 10));
               setPaymentMode("");
