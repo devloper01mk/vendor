@@ -185,7 +185,7 @@ export default function DashboardPage() {
         ) : (
           <Metric label="Tracked items" value={String(d.requirementsTracked ?? 0)} tone="neutral" />
         )}
-        {isAdminView ? <Metric label="Total Investment" value={d.investor?.totalReceived ?? "0"} tone="neutral" /> : null}
+        {isAdminView ? <Metric label="TOTAL RECEIVED FROM INVESTOR" value={d.investor?.totalReceived ?? "0"} tone="neutral" /> : null}
       </div>
 
       {!isAdminView && d.memberWallet ? (
