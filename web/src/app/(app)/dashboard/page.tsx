@@ -17,6 +17,8 @@ export default function DashboardPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState<Date | undefined>(undefined);
   const [presetOpen, setPresetOpen] = useState(false);
+  const [receivedDialogOpen, setReceivedDialogOpen] = useState(false);
+  const [receivedFilterDate, setReceivedFilterDate] = useState("");
   const presetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,6 +63,9 @@ export default function DashboardPage() {
   }
 
   const d = q.data;
+  const filteredReceivedPayments = (d.memberWallet?.receivedPayments ?? []).filter((p) =>
+    receivedFilterDate ? p.paidAt.slice(0, 10) === receivedFilterDate : true,
+  );
   const applyPreset = (preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth" | "custom") => {
     if (preset === "custom") {
       setDraftRange(customRange);
@@ -192,11 +197,79 @@ export default function DashboardPage() {
         <section className="surface p-4">
           <h2 className="mb-3 text-sm font-medium text-[#7E7569]">Member wallet</h2>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Metric label="Received from admin" value={d.memberWallet.received} tone="neutral" />
+            <Metric
+              label="Received from admin"
+              value={d.memberWallet.received}
+              tone="neutral"
+              onClick={() => {
+                setReceivedDialogOpen(true);
+                setReceivedFilterDate("");
+              }}
+            />
             <Metric label="Spent to vendors" value={d.memberWallet.spent} tone="positive" />
             <Metric label="Available balance" value={d.memberWallet.balance} tone="negative" />
           </div>
         </section>
+      ) : null}
+      {!isAdminView && d.memberWallet && receivedDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/30 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setReceivedDialogOpen(false);
+          }}
+        >
+          <div className="surface w-full max-w-3xl p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-[#2A2A2A]">Received from admin</h3>
+              <div className="ml-auto flex items-center gap-2">
+                <input
+                  type="date"
+                  className="input-base h-10 min-w-[180px]"
+                  value={receivedFilterDate}
+                  onChange={(e) => setReceivedFilterDate(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center rounded-lg border border-[#E5DED3] bg-white px-4 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
+                  disabled={!receivedFilterDate}
+                  onClick={() => setReceivedFilterDate("")}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center rounded-xl border border-[#E5DED3] bg-white px-4 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
+                  onClick={() => setReceivedDialogOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-[#E5DED3] bg-[#FBF9F5] text-xs uppercase tracking-wide text-[#7E7569]">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Date</th>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Payment method</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EEE7DD]">
+                  {filteredReceivedPayments.map((p) => (
+                    <tr key={p.id}>
+                      <td className="px-4 py-3 tabular-nums text-[#6F6659]">{p.paidAt.slice(0, 10)}</td>
+                      <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{p.amount}</td>
+                      <td className="px-4 py-3 text-[#6F6659]">{p.method || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!filteredReceivedPayments.length ? (
+                <p className="px-4 py-8 text-center text-sm text-[#8A8072]">No received payments for selected date.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -275,17 +348,24 @@ function Metric({
   label,
   value,
   tone,
+  onClick,
 }: {
   label: string;
   value: string;
   tone: "positive" | "negative" | "neutral";
+  onClick?: () => void;
 }) {
   const toneClass = tone === "positive" ? "tone-positive" : tone === "negative" ? "tone-negative" : "text-[#2A2A2A]";
   return (
-    <div className="surface p-5">
+    <button
+      type="button"
+      className={`surface block w-full p-5 text-left ${onClick ? "transition hover:bg-[#FAF7F2]" : ""}`}
+      onClick={onClick}
+      disabled={!onClick}
+    >
       <p className="text-xs font-medium uppercase tracking-wide text-[#7E7569]">{label}</p>
       <p className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${toneClass}`}>{value}</p>
-    </div>
+    </button>
   );
 }
 

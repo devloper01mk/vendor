@@ -25,6 +25,8 @@ type Detail = {
     note?: string | null;
   }[];
   invoice: { fileUrl: string; originalName: string } | null;
+  billStatus?: "yes" | "no";
+  billReceived?: boolean;
 };
 
 type InvoiceFile = { uri: string; type: string; name: string };
@@ -44,6 +46,7 @@ export function PaymentScreen() {
   const [paymentNote, setPaymentNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("ALL");
+  const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
 
   function numberOnly(s: string) {
@@ -54,6 +57,7 @@ export function PaymentScreen() {
     const api = createApi(() => token);
     const d = await api.get<Detail>(`/requirements/${id}`);
     setRow(d);
+    setBillStatus(d.billStatus ?? (d.billReceived ? "yes" : "no"));
   }, [id, token]);
 
   useEffect(() => {
@@ -85,8 +89,9 @@ export function PaymentScreen() {
     try {
       const api = createApi(() => token);
       await api.post(`/requirements/${id}/payments`, { amount, note: paymentNote.trim() || undefined });
+      await api.patch(`/requirements/${id}`, { billStatus });
 
-      if (invoiceFile) {
+      if (billStatus === "yes" && invoiceFile) {
         if (!token) throw new Error("Not signed in");
         const formData = new FormData();
         formData.append(
@@ -116,6 +121,7 @@ export function PaymentScreen() {
       await load();
       setPaymentAmount("");
       setPaymentNote("");
+      setBillStatus("no");
       setInvoiceFile(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to add payment");
@@ -232,16 +238,32 @@ export function PaymentScreen() {
           onChangeText={setPaymentNote}
           multiline
         />
-        <View style={styles.invoiceUploadRow}>
+        <View style={styles.filterRow}>
           <Pressable
-            style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
-            onPress={pickInvoice}
-            disabled={saving}
+            style={({ pressed }) => [styles.filterChip, billStatus === "no" && styles.filterChipOn, pressed && styles.pressed]}
+            onPress={() => setBillStatus("no")}
           >
-            <Text style={styles.linkBtnText}>{invoiceFile ? "Replace invoice" : "Upload invoice (optional)"}</Text>
+            <Text style={[styles.filterChipText, billStatus === "no" && styles.filterChipTextOn]}>Bill: No</Text>
           </Pressable>
-          {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
+          <Pressable
+            style={({ pressed }) => [styles.filterChip, billStatus === "yes" && styles.filterChipOn, pressed && styles.pressed]}
+            onPress={() => setBillStatus("yes")}
+          >
+            <Text style={[styles.filterChipText, billStatus === "yes" && styles.filterChipTextOn]}>Bill: Yes</Text>
+          </Pressable>
         </View>
+        {billStatus === "yes" ? (
+          <View style={styles.invoiceUploadRow}>
+            <Pressable
+              style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
+              onPress={pickInvoice}
+              disabled={saving}
+            >
+              <Text style={styles.linkBtnText}>{invoiceFile ? "Replace invoice" : "Upload invoice (optional)"}</Text>
+            </Pressable>
+            {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
+          </View>
+        ) : null}
         <PrimaryButton title="Save payment" onPress={addPayment} disabled={saving} loading={saving} />
       </CardContainer>
 

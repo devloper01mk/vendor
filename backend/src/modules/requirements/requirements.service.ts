@@ -60,10 +60,13 @@ export class RequirementsService {
       id: row.id,
       itemName: row.itemName,
       brand: row.brand,
+      details: row.brand,
+      brandPersonName: row.vendor.name,
       quantity: row.quantity.toString(),
       totalAmount: row.totalAmount.toString(),
       status: row.status,
       billReceived: row.billReceived,
+      billStatus: row.billReceived ? "yes" : "no",
       entryDate: row.entryDate,
       notes: row.notes,
       isFlagged: row.isFlagged,
@@ -213,7 +216,8 @@ export class RequirementsService {
         quantity: new Prisma.Decimal(dto.quantity),
         totalAmount: new Prisma.Decimal(dto.totalAmount),
         status: dto.status ?? RequirementStatus.PENDING,
-        billReceived: dto.billReceived ?? false,
+        billReceived:
+          dto.billStatus !== undefined ? dto.billStatus === "yes" : (dto.billReceived ?? false),
         entryDate: new Date(dto.entryDate),
         notes: dto.notes,
         vendorId: dto.vendorId,
@@ -259,7 +263,8 @@ export class RequirementsService {
             totalAmount:
               dto.totalAmount !== undefined ? new Prisma.Decimal(dto.totalAmount) : undefined,
             status: dto.status,
-            billReceived: dto.billReceived,
+            billReceived:
+              dto.billStatus !== undefined ? dto.billStatus === "yes" : dto.billReceived,
             entryDate: dto.entryDate !== undefined ? new Date(dto.entryDate) : undefined,
             notes: dto.notes,
             vendorId: dto.vendorId,

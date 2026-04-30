@@ -365,7 +365,7 @@ export function TransactionsScreen() {
                 <Text style={styles.txTitle} numberOfLines={1}>
                   {inbound ? "From " : "To "} {item.vendor.name}
                 </Text>
-                <Text style={styles.txMeta}>Payment</Text>
+                <Text style={styles.txMeta}>Brand/Person</Text>
                 <Text style={styles.txMeta}>{shortDate(item.entryDate)}</Text>
               </View>
               <View style={styles.txRight}>

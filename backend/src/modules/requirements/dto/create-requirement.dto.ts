@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -39,6 +40,11 @@ export class CreateRequirementDto {
   @IsOptional()
   @IsBoolean()
   billReceived?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["yes", "no"])
+  billStatus?: "yes" | "no";
 
   @IsDateString()
   entryDate!: string;

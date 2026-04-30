@@ -4,10 +4,13 @@ export type RequirementRow = {
   id: string;
   itemName: string;
   brand: string | null;
+  details?: string | null;
+  brandPersonName?: string;
   quantity: string;
   totalAmount: string;
   status: string;
   billReceived: boolean;
+  billStatus?: "yes" | "no";
   entryDate: string;
   notes?: string | null;
   paidTotal: string;
@@ -44,7 +47,19 @@ export type DashboardSummary = {
   totals: { committed: string; paid: string; pending: string };
   userFunding?: { paidToUsers: string };
   investor?: { totalReceived: string };
-  memberWallet?: { received: string; spent: string; balance: string } | null;
+  memberWallet?:
+    | {
+        received: string;
+        spent: string;
+        balance: string;
+        receivedPayments?: {
+          id: string;
+          amount: string;
+          paidAt: string;
+          method?: string | null;
+        }[];
+      }
+    | null;
   vendorPending: { vendorId: string; name: string; pending: string }[];
   siteSpend: { siteId: string; name: string; paid: string }[];
   monthly: { month: string; paid: string; committed: string }[];

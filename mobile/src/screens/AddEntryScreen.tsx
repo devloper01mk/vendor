@@ -41,6 +41,7 @@ export function AddEntryScreen() {
   const [total, setTotal] = useState("");
   const [paid, setPaid] = useState("");
   const [note, setNote] = useState("");
+  const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -144,14 +145,14 @@ export function AddEntryScreen() {
         totalAmount: Number(total),
         entryDate,
         status: "PENDING",
-        billReceived: false,
+        billStatus,
         notes: note.trim() || undefined,
       });
       const paidAmount = Number(paid);
       if (paid && Number.isFinite(paidAmount) && paidAmount > 0) {
         await api.post(`/requirements/${row.id}/payments`, { amount: paidAmount, note: note.trim() || undefined });
       }
-      if (invoiceFile) {
+      if (billStatus === "yes" && invoiceFile) {
         await uploadInvoice(row.id);
       }
       setStatus("Saved");
@@ -160,6 +161,7 @@ export function AddEntryScreen() {
       setTotal("");
       setPaid("");
       setNote("");
+      setBillStatus("no");
       setInvoiceFile(null);
       setErrors({});
       navigation.goBack();
@@ -234,7 +236,7 @@ export function AddEntryScreen() {
 
       <CardContainer style={styles.card}>
         <Text style={styles.cardTitle}>Type</Text>
-        <Field label="Vendor">
+        <Field label="Brand/Person">
           <View style={styles.vendorRow}>
             <View style={styles.vendorPickerWrap}>
               <PickerLike options={vendors} value={vendorId} onChange={setVendorId} />
@@ -277,7 +279,7 @@ export function AddEntryScreen() {
           error={errors.item}
         />
         <InputField
-          label="Brand / source"
+          label="Details"
           value={brand}
           onChangeText={setBrand}
           placeholder="Optional — Amazon, local market…"
@@ -320,12 +322,38 @@ export function AddEntryScreen() {
       </CardContainer>
 
       <CardContainer style={styles.card}>
-        <Text style={styles.cardTitle}>Invoice</Text>
-        <Text style={styles.cardHint}>Attach a PDF or photo for your records.</Text>
-        <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={pickInvoice}>
-          <Text style={styles.chipText}>{invoiceFile ? "Replace file" : "Choose PDF or image"}</Text>
-        </Pressable>
-        {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
+        <Text style={styles.cardTitle}>Bill Status</Text>
+        <View style={styles.pickerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.chip,
+              billStatus === "no" && styles.chipOn,
+              pressed && styles.chipPressed,
+            ]}
+            onPress={() => setBillStatus("no")}
+          >
+            <Text style={[styles.chipText, billStatus === "no" && styles.chipTextOn]}>No</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.chip,
+              billStatus === "yes" && styles.chipOn,
+              pressed && styles.chipPressed,
+            ]}
+            onPress={() => setBillStatus("yes")}
+          >
+            <Text style={[styles.chipText, billStatus === "yes" && styles.chipTextOn]}>Yes</Text>
+          </Pressable>
+        </View>
+        {billStatus === "yes" ? (
+          <>
+            <Text style={styles.cardHint}>Attach a PDF or photo for your records.</Text>
+            <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={pickInvoice}>
+              <Text style={styles.chipText}>{invoiceFile ? "Replace file" : "Choose PDF or image"}</Text>
+            </Pressable>
+            {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
+          </>
+        ) : null}
       </CardContainer>
 
       {status ? (

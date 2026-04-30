@@ -36,6 +36,7 @@ export default function NewExpensePage() {
   const [qty, setQty] = useState("1");
   const [total, setTotal] = useState("");
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [payAmount, setPayAmount] = useState("");
   const [gst, setGst] = useState('{"gstin":"","taxableValue":"","cgst":"","sgst":""}');
   const [msg, setMsg] = useState<string | null>(null);
@@ -52,14 +53,14 @@ export default function NewExpensePage() {
         totalAmount: Number(total),
         entryDate: new Date(entryDate).toISOString(),
         status: "PENDING",
-        billReceived: false,
+        billStatus,
       };
       const row = await api.post<{ id: string }>("/requirements", body);
       if (payAmount && Number(payAmount) > 0) {
         await api.post(`/requirements/${row.id}/payments`, { amount: Number(payAmount) });
       }
       const f = fileRef.current?.files?.[0];
-      if (f) {
+      if (billStatus === "yes" && f) {
         const form = new FormData();
         form.append("file", f);
         form.append("gstDetails", gst);
@@ -113,7 +114,7 @@ export default function NewExpensePage() {
           value={vendorId}
           onChange={setVendorId}
           options={[
-            { value: "", label: "Select vendor" },
+            { value: "", label: "Select Brand/Person" },
             ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
           ]}
         />
@@ -133,9 +134,18 @@ export default function NewExpensePage() {
         />
         <input
           className="input-base"
-          placeholder="Brand / source"
+          placeholder="Details"
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
+        />
+        <label className="text-xs text-muted">Bill status</label>
+        <AppSelect
+          value={billStatus}
+          onChange={(value) => setBillStatus(value as "yes" | "no")}
+          options={[
+            { value: "no", label: "No" },
+            { value: "yes", label: "Yes" },
+          ]}
         />
         <div className="grid grid-cols-2 gap-3">
           <input
@@ -163,7 +173,8 @@ export default function NewExpensePage() {
           value={payAmount}
           onChange={(e) => setPayAmount(e.target.value)}
         />
-        <div>
+        {billStatus === "yes" ? (
+          <div>
           <label className="text-xs text-muted">Invoice PDF / image + GST JSON</label>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" className="mt-1 block w-full text-sm" />
           <textarea
@@ -172,7 +183,8 @@ export default function NewExpensePage() {
             value={gst}
             onChange={(e) => setGst(e.target.value)}
           />
-        </div>
+          </div>
+        ) : null}
         {msg ? <p className="text-sm text-muted">{msg}</p> : null}
         <button
           type="button"

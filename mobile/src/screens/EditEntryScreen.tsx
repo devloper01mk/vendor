@@ -22,6 +22,8 @@ type Detail = {
   brand: string | null;
   totalAmount: string;
   paidTotal: string;
+  billStatus?: "yes" | "no";
+  billReceived?: boolean;
   invoice: { fileUrl: string; originalName: string } | null;
   notes: string | null;
   vendor: { id: string; name: string };
@@ -59,6 +61,7 @@ export function EditEntryScreen() {
   const [paidTotal, setPaidTotal] = useState("0");
   const [paidTotalOriginal, setPaidTotalOriginal] = useState("0");
   const [invoice, setInvoice] = useState<Detail["invoice"]>(null);
+  const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ item?: string; total?: string }>({});
@@ -88,6 +91,7 @@ export function EditEntryScreen() {
         setPaidTotal(d.paidTotal ?? "0");
         setPaidTotalOriginal(d.paidTotal ?? "0");
         setInvoice(d.invoice ?? null);
+        setBillStatus(d.billStatus ?? (d.billReceived ? "yes" : "no"));
       } catch {
         if (!cancelled) setStatus("Could not load transaction");
       } finally {
@@ -172,13 +176,14 @@ export function EditEntryScreen() {
         quantity: 1,
         totalAmount: Number(total),
         entryDate: new Date().toISOString(),
+        billStatus,
         notes: note.trim() || undefined,
       });
       const delta = paidNext - paidPrev;
       if (delta > 0) {
         await api.post(`/requirements/${id}/payments`, { amount: delta, note: note.trim() || undefined });
       }
-      if (invoiceFile) {
+      if (billStatus === "yes" && invoiceFile) {
         await uploadInvoice(id);
       }
       navigation.goBack();
@@ -218,7 +223,7 @@ export function EditEntryScreen() {
 
       <CardContainer style={styles.card}>
         <Text style={styles.cardTitle}>Parties</Text>
-        <Field label="Vendor">
+        <Field label="Brand/Person">
           <PickerLike options={vendors} value={vendorId} onChange={setVendorId} disabled={!canEdit} />
         </Field>
         <Field label="Site">
@@ -238,7 +243,7 @@ export function EditEntryScreen() {
           editable={canEdit}
           error={errors.item}
         />
-        <InputField label="Brand / source" value={brand} onChangeText={setBrand} editable={canEdit} />
+        <InputField label="Details" value={brand} onChangeText={setBrand} editable={canEdit} />
         <View style={styles.amountRow}>
           <View style={styles.amountHalf}>
             <InputField
@@ -269,6 +274,26 @@ export function EditEntryScreen() {
       </CardContainer>
 
       <CardContainer style={styles.card}>
+        <Text style={styles.cardTitle}>Bill status</Text>
+        <View style={styles.pickerRow}>
+          <Pressable
+            style={({ pressed }) => [styles.chip, billStatus === "no" && styles.chipOn, pressed && styles.chipPressed]}
+            onPress={() => setBillStatus("no")}
+            disabled={!canEdit}
+          >
+            <Text style={[styles.chipText, billStatus === "no" && styles.chipTextOn]}>No</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.chip, billStatus === "yes" && styles.chipOn, pressed && styles.chipPressed]}
+            onPress={() => setBillStatus("yes")}
+            disabled={!canEdit}
+          >
+            <Text style={[styles.chipText, billStatus === "yes" && styles.chipTextOn]}>Yes</Text>
+          </Pressable>
+        </View>
+      </CardContainer>
+
+      <CardContainer style={styles.card}>
         <Text style={styles.cardTitle}>Invoice</Text>
         {invoice ? (
           <Pressable style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]} onPress={() => Linking.openURL(invoice.fileUrl)}>
@@ -277,9 +302,11 @@ export function EditEntryScreen() {
         ) : (
           <Text style={styles.hint}>No invoice on file yet.</Text>
         )}
-        <Pressable style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]} onPress={pickInvoice} disabled={!canEdit}>
-          <Text style={styles.linkBtnText}>{invoiceFile ? `Replace with ${invoiceFile.name}` : "Upload or replace"}</Text>
-        </Pressable>
+        {billStatus === "yes" ? (
+          <Pressable style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]} onPress={pickInvoice} disabled={!canEdit}>
+            <Text style={styles.linkBtnText}>{invoiceFile ? `Replace with ${invoiceFile.name}` : "Upload or replace"}</Text>
+          </Pressable>
+        ) : null}
       </CardContainer>
 
       <CardContainer style={styles.card}>

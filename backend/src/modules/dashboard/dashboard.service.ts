@@ -138,6 +138,12 @@ export class DashboardService {
     const totalInvestorReceived = investorRows.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0));
 
     let receivedFromAdmin = new Prisma.Decimal(0);
+    let receivedFromAdminRows: {
+      id: string;
+      amount: string;
+      paidAt: Date;
+      method: string | null;
+    }[] = [];
     if (user.role === "MEMBER") {
       const allocationRows = await this.prisma.payment.findMany({
         where: {
@@ -147,9 +153,16 @@ export class DashboardService {
             itemName: INTERNAL_MEMBER_ALLOCATION_ITEM,
           },
         },
-        select: { amount: true },
+        orderBy: { paidAt: "desc" },
+        select: { id: true, amount: true, paidAt: true, method: true },
       });
       receivedFromAdmin = allocationRows.reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
+      receivedFromAdminRows = allocationRows.map((row) => ({
+        id: row.id,
+        amount: row.amount.toString(),
+        paidAt: row.paidAt,
+        method: row.method,
+      }));
     }
     const availableBalance = receivedFromAdmin.sub(totalPaid);
 
@@ -171,6 +184,7 @@ export class DashboardService {
               received: receivedFromAdmin.toString(),
               spent: totalPaid.toString(),
               balance: availableBalance.toString(),
+              receivedPayments: receivedFromAdminRows,
             }
           : null,
       vendorPending: [...vendorPending.entries()].map(([id, v]) => ({

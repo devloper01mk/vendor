@@ -9,44 +9,28 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { ImportColumnMapDto } from "./dto/import-mapping.dto";
 
 const DEFAULT_IMPORT_COLUMNS: ImportColumnMapDto = {
-  requirementId: "requirementId",
-  itemName: "itemName",
-  brand: "brand",
-  siteName: "siteName",
-  siteCode: "siteCode",
-  siteAddress: "siteAddress",
-  vendorName: "vendorName",
-  vendorPhone: "vendorPhone",
-  vendorAlternatePhone: "vendorAlternatePhone",
-  vendorEmail: "vendorEmail",
-  vendorGstNumber: "vendorGstNumber",
-  vendorAddress: "vendorAddress",
-  totalAmount: "totalAmount",
-  status: "status",
-  billReceived: "billReceived",
   entryDate: "entryDate",
-  paymentAmount: "paymentAmount",
+  itemName: "itemName",
+  details: "details",
+  brandPerson: "brandPerson",
+  siteName: "siteName",
+  totalAmount: "totalAmount",
+  paidTotal: "paidTotal",
+  status: "status",
+  billStatus: "billStatus",
   notes: "notes",
 };
 
 const TEMPLATE_HEADERS = [
-  "requirementId",
-  "itemName",
-  "brand",
-  "siteName",
-  "siteCode",
-  "siteAddress",
-  "vendorName",
-  "vendorPhone",
-  "vendorAlternatePhone",
-  "vendorEmail",
-  "vendorGstNumber",
-  "vendorAddress",
-  "totalAmount",
-  "status",
-  "billReceived",
   "entryDate",
-  "paymentAmount",
+  "itemName",
+  "details",
+  "brandPerson",
+  "siteName",
+  "totalAmount",
+  "paidTotal",
+  "status",
+  "billStatus",
   "notes",
 ];
 
@@ -74,23 +58,15 @@ export class ImportService {
     const optionalIdx = (title: string) => header.findIndex((h) => h.toLowerCase() === title.toLowerCase());
 
     const col = {
-      requirementId: columns.requirementId ? optionalIdx(columns.requirementId) : -1,
+      entryDate: idx(columns.entryDate),
       item: idx(columns.itemName),
-      brand: columns.brand ? idx(columns.brand) : -1,
+      details: columns.details ? optionalIdx(columns.details) : -1,
+      brandPerson: idx(columns.brandPerson),
       site: idx(columns.siteName),
-      siteCode: columns.siteCode ? idx(columns.siteCode) : -1,
-      siteAddress: columns.siteAddress ? idx(columns.siteAddress) : -1,
-      vendor: idx(columns.vendorName),
-      vendorPhone: columns.vendorPhone ? idx(columns.vendorPhone) : -1,
-      vendorAlternatePhone: columns.vendorAlternatePhone ? idx(columns.vendorAlternatePhone) : -1,
-      vendorEmail: columns.vendorEmail ? idx(columns.vendorEmail) : -1,
-      vendorGstNumber: columns.vendorGstNumber ? idx(columns.vendorGstNumber) : -1,
-      vendorAddress: columns.vendorAddress ? idx(columns.vendorAddress) : -1,
       amount: idx(columns.totalAmount),
+      paidTotal: columns.paidTotal ? optionalIdx(columns.paidTotal) : -1,
       status: columns.status ? optionalIdx(columns.status) : -1,
-      bill: columns.billReceived ? idx(columns.billReceived) : -1,
-      date: idx(columns.entryDate),
-      pay: columns.paymentAmount ? idx(columns.paymentAmount) : -1,
+      billStatus: columns.billStatus ? optionalIdx(columns.billStatus) : -1,
       notes: columns.notes ? idx(columns.notes) : -1,
     };
 
@@ -100,93 +76,54 @@ export class ImportService {
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
       try {
-        const requirementId =
-          col.requirementId >= 0 ? String(row[col.requirementId] ?? "").trim() : "";
         const itemName = String(row[col.item] ?? "").trim();
         if (!itemName) continue;
 
-        const vendorName = String(row[col.vendor] ?? "").trim();
+        const vendorName = String(row[col.brandPerson] ?? "").trim();
         const siteName = String(row[col.site] ?? "").trim();
         if (!vendorName || !siteName) {
-          errors.push({ row: r + 1, message: "Vendor and site required" });
+          errors.push({ row: r + 1, message: "Brand/Person and site required" });
           continue;
         }
 
-        const vendor = await this.upsertVendor(vendorName, {
-          phone: col.vendorPhone >= 0 ? String(row[col.vendorPhone] ?? "").trim() : "",
-          alternatePhone:
-            col.vendorAlternatePhone >= 0 ? String(row[col.vendorAlternatePhone] ?? "").trim() : "",
-          email: col.vendorEmail >= 0 ? String(row[col.vendorEmail] ?? "").trim() : "",
-          gstNumber: col.vendorGstNumber >= 0 ? String(row[col.vendorGstNumber] ?? "").trim() : "",
-          address: col.vendorAddress >= 0 ? String(row[col.vendorAddress] ?? "").trim() : "",
-        });
-        const site = await this.upsertSite(siteName, {
-          code: col.siteCode >= 0 ? String(row[col.siteCode] ?? "").trim() : "",
-          address: col.siteAddress >= 0 ? String(row[col.siteAddress] ?? "").trim() : "",
-        });
+        const vendor = await this.upsertVendor(vendorName);
+        const site = await this.upsertSite(siteName);
 
         const total = this.parseAmount(row[col.amount]);
-        const brand =
-          col.brand >= 0 ? String(row[col.brand] ?? "").trim() || null : null;
+        const details = col.details >= 0 ? String(row[col.details] ?? "").trim() || null : null;
         const status = this.parseStatus(col.status >= 0 ? row[col.status] : "");
-        const billReceived = this.parseBoolean(col.bill >= 0 ? row[col.bill] : "", false);
+        const billReceived = this.parseBoolean(col.billStatus >= 0 ? row[col.billStatus] : "", false);
 
-        const entryDate = this.parseDate(row[col.date]);
+        const entryDate = this.parseDate(row[col.entryDate]);
         const notes =
           col.notes >= 0 ? String(row[col.notes] ?? "").trim() || null : null;
-        let reqId = requirementId;
-        if (requirementId) {
-          const existing = await this.prisma.requirement.findUnique({ where: { id: requirementId } });
-          if (!existing) {
-            errors.push({ row: r + 1, message: `requirementId not found: ${requirementId}` });
-            continue;
-          }
-          const updated = await this.prisma.requirement.update({
-            where: { id: requirementId },
-            data: {
-              itemName,
-              brand,
-              totalAmount: new Prisma.Decimal(total),
-              status,
-              billReceived,
-              entryDate,
-              notes,
-              vendorId: vendor.id,
-              siteId: site.id,
-            },
-          });
-          reqId = updated.id;
-        } else {
-          const req = await this.prisma.requirement.create({
-            data: {
-              itemName,
-              brand,
-              quantity: new Prisma.Decimal(1),
-              totalAmount: new Prisma.Decimal(total),
-              status,
-              billReceived,
-              entryDate,
-              notes,
-              vendorId: vendor.id,
-              siteId: site.id,
-              createdById: userId,
-            },
-          });
-          reqId = req.id;
-          created.push(req.id);
-        }
+        const req = await this.prisma.requirement.create({
+          data: {
+            itemName,
+            brand: details,
+            quantity: new Prisma.Decimal(1),
+            totalAmount: new Prisma.Decimal(total),
+            status,
+            billReceived,
+            entryDate,
+            notes,
+            vendorId: vendor.id,
+            siteId: site.id,
+            createdById: userId,
+          },
+        });
+        const reqId = req.id;
+        created.push(req.id);
 
-        if (col.pay >= 0) {
-          const payAmt = this.parseAmount(row[col.pay]);
-          if (payAmt > 0) {
-            await this.prisma.payment.create({
-              data: {
-                requirementId: reqId,
-                amount: new Prisma.Decimal(payAmt),
-                recordedById: userId,
-              },
-            });
-          }
+        const paidTotal = col.paidTotal >= 0 ? this.parseAmount(row[col.paidTotal]) : 0;
+        if (paidTotal > 0) {
+          await this.prisma.payment.create({
+            data: {
+              requirementId: reqId,
+              amount: new Prisma.Decimal(paidTotal),
+              recordedById: userId,
+            },
+          });
         }
         // Always derive status from payment math:
         // paidTotal vs totalAmount determines COMPLETED/PENDING.
@@ -221,63 +158,30 @@ export class ImportService {
     return data as unknown[][];
   }
 
-  private async upsertVendor(
-    name: string,
-    details: { phone: string; alternatePhone: string; email: string; gstNumber: string; address: string },
-  ) {
+  private async upsertVendor(name: string) {
     const existing = await this.prisma.vendor.findFirst({
       where: { name: { equals: name, mode: "insensitive" } },
     });
-    const payload: Prisma.VendorUncheckedUpdateInput = {
-      phone: details.phone || undefined,
-      alternatePhone: details.alternatePhone || undefined,
-      email: details.email || undefined,
-      gstNumber: details.gstNumber || undefined,
-      address: details.address || undefined,
-    };
     if (existing) {
-      if (Object.values(payload).some(Boolean)) {
-        return this.prisma.vendor.update({
-          where: { id: existing.id },
-          data: payload,
-        });
-      }
       return existing;
     }
     return this.prisma.vendor.create({
       data: {
         name,
-        phone: details.phone || null,
-        alternatePhone: details.alternatePhone || null,
-        email: details.email || null,
-        gstNumber: details.gstNumber || null,
-        address: details.address || null,
       },
     });
   }
 
-  private async upsertSite(name: string, details: { code: string; address: string }) {
+  private async upsertSite(name: string) {
     const existing = await this.prisma.site.findFirst({
       where: { name: { equals: name, mode: "insensitive" } },
     });
-    const payload: Prisma.SiteUncheckedUpdateInput = {
-      code: details.code || undefined,
-      address: details.address || undefined,
-    };
     if (existing) {
-      if (Object.values(payload).some(Boolean)) {
-        return this.prisma.site.update({
-          where: { id: existing.id },
-          data: payload,
-        });
-      }
       return existing;
     }
     return this.prisma.site.create({
       data: {
         name,
-        code: details.code || null,
-        address: details.address || null,
       },
     });
   }
@@ -335,23 +239,15 @@ export class ImportService {
     const templateRows = [
       TEMPLATE_HEADERS,
       [
-        "",
+        "2026-04-28",
         "Cement Bags",
         "UltraTech",
-        "Site A",
-        "SITE-A",
-        "Andheri East",
         "ABC Suppliers",
-        "9876543210",
-        "",
-        "abc@supplier.com",
-        "27ABCDE1234F1Z5",
-        "Mumbai",
+        "Site A",
         "12000",
+        "0",
         "PENDING",
         "yes",
-        "2026-04-28",
-        "0",
         "Optional remarks",
       ],
     ];
@@ -359,14 +255,13 @@ export class ImportService {
 
     const behaviorRows = [
       ["Behavior", "Description"],
-      ["Dedup vendor", "vendorName is matched case-insensitively. Existing vendor is reused/updated."],
+      ["Dedup Brand/Person", "brandPerson is matched case-insensitively. Existing row is reused/updated."],
       ["Dedup site", "siteName is matched case-insensitively. Existing site is reused/updated."],
-      ["Update transaction", "If requirementId is provided and found, that transaction is updated."],
-      ["Create transaction", "If requirementId is empty, a new transaction is created."],
-      ["Payment handling", "paymentAmount adds a new payment entry. Keep 0 or empty if no payment."],
+      ["Create transaction", "Each row creates one transaction entry."],
+      ["Payment handling", "paidTotal adds an initial payment. Keep 0 or empty if no payment."],
       ["Status auto-sync", "After payment import, status becomes COMPLETED if fully paid, else PENDING."],
       ["Accepted status", "PENDING or COMPLETED (any other value defaults to PENDING)."],
-      ["Accepted billReceived", "yes/no, true/false, y/n, 1/0."],
+      ["Accepted billStatus", "yes/no, true/false, y/n, 1/0."],
       ["Date format", "Use YYYY-MM-DD for entryDate."],
       ["Important", "Do not rename column headers in TransactionsTemplate sheet."],
     ];
@@ -388,43 +283,29 @@ export class ImportService {
       const paid = r.payments.reduce((acc, p) => acc.add(p.amount), new Prisma.Decimal(0));
       return {
         requirementId: r.id,
-        itemName: r.itemName,
-        brand: r.brand ?? "",
-        siteName: r.site.name,
-        siteCode: r.site.code ?? "",
-        siteAddress: r.site.address ?? "",
-        vendorName: r.vendor.name,
-        vendorPhone: r.vendor.phone ?? "",
-        vendorAlternatePhone: r.vendor.alternatePhone ?? "",
-        vendorEmail: r.vendor.email ?? "",
-        vendorGstNumber: r.vendor.gstNumber ?? "",
-        vendorAddress: r.vendor.address ?? "",
-        totalAmount: r.totalAmount.toString(),
-        status: r.status,
-        billReceived: r.billReceived ? "yes" : "no",
         entryDate: r.entryDate.toISOString().slice(0, 10),
-        paymentAmount: "0",
-        notes: r.notes ?? "",
+        itemName: r.itemName,
+        details: r.brand ?? "",
+        brandPerson: r.vendor.name,
+        siteName: r.site.name,
+        totalAmount: r.totalAmount.toString(),
         paidTotal: paid.toString(),
-        remaining: r.totalAmount.sub(paid).toString(),
+        status: r.status,
+        billStatus: r.billReceived ? "yes" : "no",
+        notes: r.notes ?? "",
       };
     });
 
     const wb = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(data, {
-      header: [
-        ...TEMPLATE_HEADERS,
-        "paidTotal",
-        "remaining",
-      ],
+      header: TEMPLATE_HEADERS,
     });
     XLSX.utils.book_append_sheet(wb, sheet, "TransactionsData");
     XLSX.utils.book_append_sheet(
       wb,
       XLSX.utils.aoa_to_sheet([
         ["Behavior", "Description"],
-        ["paidTotal / remaining", "Read-only reference fields. Import ignores these two columns."],
-        ["paymentAmount", "Put additional payment amount to add during import, else keep 0."],
+        ["paidTotal", "Initial paid amount for import. 0 means no payment."],
       ]),
       "BehaviorAndRules",
     );

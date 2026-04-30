@@ -38,6 +38,7 @@ export default function ExpensesPage() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentBillStatus, setPaymentBillStatus] = useState<"yes" | "no">("no");
   const [paymentInvoiceFile, setPaymentInvoiceFile] = useState<File | null>(null);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentUiError, setPaymentUiError] = useState("");
@@ -50,6 +51,7 @@ export default function ExpensesPage() {
   const [qtyDraft, setQtyDraft] = useState("1");
   const [totalDraft, setTotalDraft] = useState("");
   const [entryDateDraft, setEntryDateDraft] = useState(() => new Date().toISOString().slice(0, 10));
+  const [billStatusDraft, setBillStatusDraft] = useState<"yes" | "no">("no");
   const [payAmountDraft, setPayAmountDraft] = useState("");
   const [createStatus, setCreateStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -247,6 +249,7 @@ export default function ExpensesPage() {
       setPaymentMethod("");
       setPaymentNote("");
       setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentBillStatus("no");
       setPaymentInvoiceFile(null);
       setPaymentUiError("");
     },
@@ -285,14 +288,14 @@ export default function ExpensesPage() {
         totalAmount: Number(totalDraft),
         entryDate: new Date(entryDateDraft).toISOString(),
         status: "PENDING",
-        billReceived: false,
+        billStatus: billStatusDraft,
       };
       const row = await api.post<{ id: string }>("/requirements", body);
       if (payAmountDraft && Number(payAmountDraft) > 0) {
         await api.post(`/requirements/${row.id}/payments`, { amount: Number(payAmountDraft) });
       }
       const invoiceFile = invoiceInputRef.current?.files?.[0];
-      if (invoiceFile) {
+      if (billStatusDraft === "yes" && invoiceFile) {
         const form = new FormData();
         form.append("file", invoiceFile);
         form.append("gstDetails", '{"gstin":"","taxableValue":"","cgst":"","sgst":""}');
@@ -314,6 +317,7 @@ export default function ExpensesPage() {
       setQtyDraft("1");
       setTotalDraft("");
       setEntryDateDraft(new Date().toISOString().slice(0, 10));
+      setBillStatusDraft("no");
       setPayAmountDraft("");
       if (invoiceInputRef.current) invoiceInputRef.current.value = "";
     },
@@ -427,6 +431,7 @@ export default function ExpensesPage() {
         </div>
       </div>
       {importStatus ? <p className="text-sm text-[#7C7266]">{importStatus}</p> : null}
+      <p className="text-xs text-[#8A8072]">Import/Export columns use: Brand/Person, Details, Bill Status.</p>
       {exportStatus ? <p className="text-sm text-[#7C7266]">{exportStatus}</p> : null}
 
       <div className="rounded-2xl border border-[#E5DED3] bg-white p-3 shadow-[0_1px_2px_rgba(21,21,21,0.06),0_8px_24px_rgba(21,21,21,0.04)]">
@@ -436,7 +441,7 @@ export default function ExpensesPage() {
             onChange={setVendorId}
             className="h-10 min-w-[220px] rounded-lg border-[#ECE5DA] bg-[#FCFBF8] text-sm"
             options={[
-              { value: "", label: "All Vendor" },
+              { value: "", label: "All Brand/Person" },
               ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
             ]}
           />
@@ -518,9 +523,8 @@ export default function ExpensesPage() {
             <tr>
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Item</th>
-              <th className="px-4 py-3 font-medium">Vendor</th>
-              <th className="px-4 py-3 font-medium">Site</th>
-              <th className="px-4 py-3 font-medium">Entry User</th>
+              <th className="px-4 py-3 font-medium">Brand/Person</th>
+              <th className="px-4 py-3 font-medium">Details</th>
               <th className="px-4 py-3 font-medium">Total</th>
               <th className="px-4 py-3 font-medium">Paid</th>
               <th className="px-4 py-3 font-medium">Due</th>
@@ -541,8 +545,7 @@ export default function ExpensesPage() {
                   {r.brand ? <div className="text-xs text-[#8D8376]">{r.brand}</div> : null}
                 </td>
                 <td className="px-4 py-3">{r.vendor.name}</td>
-                <td className="px-4 py-3">{r.site.name}</td>
-                <td className="px-4 py-3 text-[#6F6659]">{r.createdBy.name}</td>
+                <td className="px-4 py-3">{r.brand || "—"}</td>
                 <td className="px-4 py-3 tabular-nums tone-positive">{r.totalAmount}</td>
                 <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{r.paidTotal}</td>
                 <td className="px-4 py-3 tabular-nums tone-negative">{r.remaining}</td>
@@ -606,13 +609,13 @@ export default function ExpensesPage() {
             <div className="space-y-4 px-4 pt-3 pb-4 text-sm">
               <div className="rounded-xl border border-line bg-panel-muted p-3">
                 <p className="text-lg font-semibold">{detailRow.itemName}</p>
-                <p className="mt-1 text-xs text-muted">{detailRow.brand ?? "No brand"}</p>
+                <p className="mt-1 text-xs text-muted">{detailRow.brand ?? "No details"}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Info label="Date" value={detailRow.entryDate.slice(0, 10)} />
                 <Info label="Status" value={detailRow.status} />
-                <Info label="Vendor" value={detailRow.vendor.name} />
-                <Info label="Site" value={detailRow.site.name} />
+                <Info label="Brand/Person" value={detailRow.vendor.name} />
+                <Info label="Details" value={detailRow.brand || "—"} />
                 {user?.role !== "MEMBER" ? <Info label="Entry user" value={detailRow.createdBy.name} /> : null}
                 <Info label="Quantity" value={detailRow.quantity} />
                 <Info label="Total" value={detailRow.totalAmount} />
@@ -665,6 +668,7 @@ export default function ExpensesPage() {
                       setPaymentMethod("");
                       setPaymentNote("");
                       setPaymentDate(new Date().toISOString().slice(0, 10));
+                      setPaymentBillStatus("no");
                       setPaymentInvoiceFile(null);
                       setPaymentUiError("");
                     }}
@@ -717,6 +721,7 @@ export default function ExpensesPage() {
                                         setPaymentMethod(p.method ?? "");
                                         setPaymentNote(p.note ?? "");
                                         setPaymentDate(p.paidAt.slice(0, 10));
+                                        setPaymentBillStatus(detailRow.billStatus ?? (detailRow.billReceived ? "yes" : "no"));
                                         setPaymentInvoiceFile(null);
                                         setPaymentUiError("");
                                       }}
@@ -862,6 +867,18 @@ export default function ExpensesPage() {
                 />
               </label>
               <label className="label block">
+                Bill status
+                <select
+                  className="input-base mt-1 w-full"
+                  value={paymentBillStatus}
+                  onChange={(e) => setPaymentBillStatus(e.target.value as "yes" | "no")}
+                >
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </label>
+              {paymentBillStatus === "yes" ? (
+              <label className="label block">
                 Invoice upload (optional)
                 <input
                   className="input-base mt-1 w-full"
@@ -870,6 +887,7 @@ export default function ExpensesPage() {
                   onChange={(e) => setPaymentInvoiceFile(e.target.files?.[0] ?? null)}
                 />
               </label>
+              ) : null}
               <label className="label block">
                 Note
                 <textarea className="input-base mt-1 w-full" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} />
@@ -914,6 +932,9 @@ export default function ExpensesPage() {
                         paidAt: payload.paidAt,
                       })
                       .then(async (updated) => {
+                        await api.patch<RequirementRow>(`/requirements/${detailRow.id}`, {
+                          billStatus: paymentBillStatus,
+                        });
                         setDetailRow(updated);
                         setPaymentOpen(false);
                         setEditingPaymentId(null);
@@ -921,6 +942,7 @@ export default function ExpensesPage() {
                         setPaymentMethod("");
                         setPaymentNote("");
                         setPaymentDate(new Date().toISOString().slice(0, 10));
+                        setPaymentBillStatus("no");
                         setPaymentInvoiceFile(null);
                         await Promise.all([
                           qc.invalidateQueries({ queryKey: ["requirements"] }),
@@ -942,7 +964,10 @@ export default function ExpensesPage() {
                     },
                     {
                       onSuccess: async (updated) => {
-                        if (paymentInvoiceFile) {
+                        await api.patch<RequirementRow>(`/requirements/${updated.id}`, {
+                          billStatus: paymentBillStatus,
+                        });
+                        if (paymentBillStatus === "yes" && paymentInvoiceFile) {
                           const form = new FormData();
                           form.append("file", paymentInvoiceFile);
                           const withInvoice = await api.postMultipart<RequirementRow>(
@@ -983,12 +1008,12 @@ export default function ExpensesPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="label block">
-                Vendor
+                Brand/Person
                 <AppSelect
                   value={vendorIdDraft}
                   onChange={setVendorIdDraft}
                   options={[
-                    { value: "", label: "Select vendor" },
+                    { value: "", label: "Select Brand/Person" },
                     ...(vendorsQ.data ?? []).map((v) => ({ value: v.id, label: v.name })),
                   ]}
                 />
@@ -1013,8 +1038,19 @@ export default function ExpensesPage() {
                 />
               </label>
               <label className="label block">
-                Brand
+                Details
                 <input className="input-base mt-1 w-full" value={brandDraft} onChange={(e) => setBrandDraft(e.target.value)} />
+              </label>
+              <label className="label block">
+                Bill status
+                <select
+                  className="input-base mt-1 w-full"
+                  value={billStatusDraft}
+                  onChange={(e) => setBillStatusDraft(e.target.value as "yes" | "no")}
+                >
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
               </label>
               <label className="label block">
                 Quantity
@@ -1041,10 +1077,12 @@ export default function ExpensesPage() {
                   onChange={(e) => setPayAmountDraft(e.target.value)}
                 />
               </label>
-              <label className="label block">
-                Invoice file (optional)
-                <input ref={invoiceInputRef} type="file" accept="application/pdf,image/*" className="input-base mt-1 w-full" />
-              </label>
+              {billStatusDraft === "yes" ? (
+                <label className="label block">
+                  Invoice file (optional)
+                  <input ref={invoiceInputRef} type="file" accept="application/pdf,image/*" className="input-base mt-1 w-full" />
+                </label>
+              ) : null}
             </div>
             {createStatus ? <p className="mt-3 text-sm text-[#7C7266]">{createStatus}</p> : null}
             <div className="mt-4 flex items-center justify-end gap-2">
