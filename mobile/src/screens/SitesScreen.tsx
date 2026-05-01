@@ -8,6 +8,7 @@ import type { AuthedStackParamList } from "@/navigation/types";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Site = {
   id: string;
@@ -17,12 +18,12 @@ type Site = {
   metrics?: {
     totalSpent: string;
     transactions: number;
-    status: "ACTIVE" | "INACTIVE";
   };
 };
 
 export function SitesScreen() {
   const token = useAuthStore((s) => s.token);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
   const [rows, setRows] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,6 @@ export function SitesScreen() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [siteStatus, setSiteStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
 
   async function loadData() {
     const api = createApi(() => token);
@@ -92,7 +92,6 @@ export function SitesScreen() {
     setName("");
     setCode("");
     setAddress("");
-    setSiteStatus("ACTIVE");
     setStatus(null);
     setSheetOpen(true);
   }
@@ -102,7 +101,6 @@ export function SitesScreen() {
     setName(s.name ?? "");
     setCode(s.code ?? "");
     setAddress(s.address ?? "");
-    setSiteStatus(s.metrics?.status === "INACTIVE" ? "INACTIVE" : "ACTIVE");
     setStatus(null);
     setSheetOpen(true);
   }
@@ -117,37 +115,43 @@ export function SitesScreen() {
 
   return (
     <View style={styles.screen}>
-      <FlatList
-        contentContainerStyle={styles.list}
-        data={rows}
-        keyExtractor={(i) => i.id}
-        ListHeaderComponent={
-          <View style={styles.headerWrap}>
-            <View style={styles.topRow}>
+      <View
+        style={[
+          styles.screenHeader,
+          { paddingTop: Math.max(insets.top, 12) },
+        ]}
+      >
+        <View style={styles.headerWrap}>
+          <View style={styles.topRow}>
+            <Pressable style={styles.topIconBtn}>
+              <Text style={styles.topIcon}>☰</Text>
+            </Pressable>
+            <Text style={styles.topTitle}>Sites</Text>
+            <View style={styles.topRight}>
               <Pressable style={styles.topIconBtn}>
-                <Text style={styles.topIcon}>☰</Text>
+                <Text style={styles.topIcon}>◌</Text>
               </Pressable>
-              <Text style={styles.topTitle}>Sites</Text>
-              <View style={styles.topRight}>
-                <Pressable style={styles.topIconBtn}>
-                  <Text style={styles.topIcon}>◌</Text>
-                </Pressable>
-                <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                  <Text style={styles.avatarText}>AS</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={styles.searchRow}>
-              <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
-                <Text style={styles.searchText}>Search sites...</Text>
-              </View>
-              <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
-                <Text style={styles.addInlineBtnText}>+ Add Site</Text>
+              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                <Text style={styles.avatarText}>AS</Text>
               </Pressable>
             </View>
           </View>
-        }
+          <View style={styles.searchRow}>
+            <View style={styles.searchBox}>
+              <Text style={styles.searchIcon}>⌕</Text>
+              <Text style={styles.searchText}>Search sites...</Text>
+            </View>
+            <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
+              <Text style={styles.addInlineBtnText}>+ Add Site</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+      <FlatList
+        style={styles.siteList}
+        contentContainerStyle={[styles.list, styles.listContent]}
+        data={rows}
+        keyExtractor={(i) => i.id}
         renderItem={({ item, index }) => (
           <Pressable style={styles.siteCard}>
             <View style={styles.siteIconWrap}>
@@ -161,16 +165,6 @@ export function SitesScreen() {
             <View style={styles.siteRight}>
               <Text style={styles.siteMeta}>Transactions</Text>
               <Text style={styles.siteValueSmall}>{item.metrics?.transactions ?? 0}</Text>
-              <View style={styles.statusPill}>
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    item.metrics?.status === "INACTIVE" ? styles.statusPillTextInactive : null,
-                  ]}
-                >
-                  {item.metrics?.status === "INACTIVE" ? "Inactive" : "Active"}
-                </Text>
-              </View>
               <Pressable style={styles.editBtn} onPress={() => openEditSheet(item)} hitSlop={8}>
                 <Text style={styles.editIcon}>✎</Text>
               </Pressable>
@@ -202,23 +196,14 @@ export function SitesScreen() {
                 />
               </View>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.statusField, pressed && styles.statusFieldPressed]}
-              onPress={() => setSiteStatus((v) => (v === "ACTIVE" ? "INACTIVE" : "ACTIVE"))}
-            >
-              <Text style={styles.statusLabel}>Status</Text>
-              <View style={styles.statusControl}>
-                <Text style={styles.statusValue}>{siteStatus === "ACTIVE" ? "Active" : "Inactive"}</Text>
-                <Text style={styles.statusChevron}>▾</Text>
-              </View>
-            </Pressable>
-            <PrimaryButton
-              title={editingSiteId ? "Save Site" : "Save Site"}
-              onPress={onAddSite}
-              disabled={busy || !name.trim()}
-              loading={busy}
-              style={styles.saveBtn}
-            />
+            <View style={styles.saveBtn}>
+              <PrimaryButton
+                title={editingSiteId ? "Save Site" : "Save Site"}
+                onPress={onAddSite}
+                disabled={busy || !name.trim()}
+                loading={busy}
+              />
+            </View>
             {status ? <Text style={styles.meta}>{status}</Text> : null}
           </CardContainer>
         </View>
@@ -230,13 +215,15 @@ export function SitesScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.background },
   center: { flex: 1, justifyContent: "center" },
+  screenHeader: { paddingHorizontal: 16, backgroundColor: tokens.color.background },
+  siteList: { flex: 1 },
   list: {
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 96,
     gap: 12,
     backgroundColor: tokens.color.background,
   },
+  listContent: { flexGrow: 1 },
   form: {},
   headerWrap: { gap: tokens.space[1], marginBottom: tokens.space[1] },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -304,38 +291,6 @@ const styles = StyleSheet.create({
     minHeight: 64,
     textAlignVertical: "top",
   },
-  statusField: {
-    marginTop: 8,
-    gap: 8,
-  },
-  statusFieldPressed: { opacity: 0.9 },
-  statusLabel: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "600",
-    color: tokens.color.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  statusControl: {
-    height: 46,
-    borderWidth: 1,
-    borderColor: tokens.color.border,
-    borderRadius: tokens.radius.md,
-    backgroundColor: tokens.color.panelMuted,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statusValue: {
-    color: tokens.color.text,
-    fontSize: tokens.textSize.body,
-    fontWeight: "500",
-  },
-  statusChevron: {
-    color: tokens.color.muted,
-    fontSize: 14,
-  },
   saveBtn: {
     marginTop: 14,
   },
@@ -377,14 +332,6 @@ const styles = StyleSheet.create({
   siteValue: { marginTop: 2, fontSize: 17, color: tokens.color.text, fontWeight: "700" },
   siteRight: { alignItems: "flex-end", gap: 4 },
   siteValueSmall: { fontSize: 17, color: tokens.color.text, fontWeight: "700" },
-  statusPill: {
-    borderRadius: 10,
-    backgroundColor: "#EAF5EE",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusPillText: { fontSize: 10, color: "#2E7E59", fontWeight: "600" },
-  statusPillTextInactive: { color: "#B55050" },
   sheetOverlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: {

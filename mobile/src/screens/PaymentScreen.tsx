@@ -18,6 +18,11 @@ type Detail = {
   totalAmount: string;
   paidTotal: string;
   remaining: string;
+  entryDate: string;
+  vendor: { name: string };
+  site: { name: string };
+  brand?: string | null;
+  notes?: string | null;
   payments: {
     id: string;
     amount: string;
@@ -33,6 +38,21 @@ type InvoiceFile = { uri: string; type: string; name: string };
 
 type PaymentRoute = RouteProp<AuthedStackParamList, "Payment">;
 type HistoryFilter = "ALL" | "TODAY" | "WEEK" | "MONTH";
+
+function formatEntryDate(iso: string) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 export function PaymentScreen() {
   const { params } = useRoute<PaymentRoute>();
@@ -209,6 +229,34 @@ export function PaymentScreen() {
         </CardContainer>
       </View>
 
+      <CardContainer style={styles.block}>
+        <Text style={styles.sectionTitle}>Transaction details</Text>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Entry date</Text>
+          <Text style={styles.detailValue}>{formatEntryDate(row.entryDate)}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Vendor</Text>
+          <Text style={styles.detailValue}>{row.vendor?.name ?? "—"}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Site</Text>
+          <Text style={styles.detailValue}>{row.site?.name ?? "—"}</Text>
+        </View>
+        {row.brand?.trim() ? (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Brand</Text>
+            <Text style={styles.detailValue}>{row.brand.trim()}</Text>
+          </View>
+        ) : null}
+        {row.notes?.trim() ? (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Notes</Text>
+            <Text style={styles.detailValueMultiline}>{row.notes.trim()}</Text>
+          </View>
+        ) : null}
+      </CardContainer>
+
       {row.invoice ? (
         <CardContainer style={styles.block}>
           <Text style={styles.sectionTitle}>Invoice</Text>
@@ -382,6 +430,22 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   sectionHint: { fontSize: tokens.textSize.caption, color: tokens.color.muted, marginTop: -4 },
+  detailRow: { gap: 4 },
+  detailLabel: {
+    fontSize: tokens.textSize.caption,
+    color: tokens.color.muted,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  detailValue: { fontSize: tokens.textSize.small, color: tokens.color.text, fontWeight: "500", lineHeight: 20 },
+  detailValueMultiline: {
+    fontSize: tokens.textSize.small,
+    color: tokens.color.text,
+    fontWeight: "500",
+    lineHeight: 20,
+    marginTop: 2,
+  },
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",

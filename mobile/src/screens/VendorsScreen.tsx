@@ -10,6 +10,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Vendor = {
   id: string;
@@ -53,6 +54,7 @@ function getRangeQuery(filter: RangeFilter, customFrom: string, customTo: string
 
 export function VendorsScreen() {
   const token = useAuthStore((s) => s.token);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
   const [rows, setRows] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,95 +218,101 @@ export function VendorsScreen() {
 
   return (
     <View style={styles.screen}>
+      <View
+        style={[
+          styles.screenHeader,
+          { paddingTop: Math.max(insets.top, tokens.space[2]) },
+        ]}
+      >
+        <View style={styles.headerWrap}>
+          <View style={styles.topRow}>
+            <Pressable style={styles.topIconBtn}>
+              <Text style={styles.topIcon}>☰</Text>
+            </Pressable>
+            <Text style={styles.topTitle}>Vendors</Text>
+            <View style={styles.topRight}>
+              <Pressable style={styles.topIconBtn}>
+                <Text style={styles.topIcon}>◌</Text>
+              </Pressable>
+              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                <Text style={styles.avatarText}>AS</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.searchRow}>
+            <View style={styles.searchBox}>
+              <Text style={styles.searchIcon}>⌕</Text>
+              <Text style={styles.searchText}>Search vendors...</Text>
+            </View>
+            <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
+              <Text style={styles.addInlineBtnText}>+ Add Vendor</Text>
+            </Pressable>
+          </View>
+          <View style={styles.dropdownWrap}>
+            <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
+              <Text style={styles.dropdownText}>{rangeLabel}</Text>
+              <Text style={styles.dropdownIcon}>▾</Text>
+            </Pressable>
+          </View>
+          {rangeFilter === "CUSTOM" ? (
+            <View style={styles.customRow}>
+              <Pressable
+                style={styles.dateBtn}
+                onPress={() => {
+                  const existing = customFrom ? new Date(customFrom) : new Date();
+                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                  setPickerField("from");
+                }}
+              >
+                <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.dateBtn}
+                onPress={() => {
+                  const existing = customTo ? new Date(customTo) : new Date();
+                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                  setPickerField("to");
+                }}
+              >
+                <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {pickerField ? (
+            <DateTimePicker
+              value={pickerDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(event, selectedDate) => {
+                if (event.type === "dismissed") {
+                  setPickerField(null);
+                  return;
+                }
+                if (selectedDate) {
+                  const formatted = formatYmd(selectedDate);
+                  if (pickerField === "from") setCustomFrom(formatted);
+                  else setCustomTo(formatted);
+                }
+                setPickerField(null);
+              }}
+            />
+          ) : null}
+          {listError ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{listError}</Text>
+              <Pressable style={styles.retryBtn} onPress={() => void loadData()}>
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
       <FlatList
         removeClippedSubviews={false}
-        contentContainerStyle={styles.list}
+        style={styles.vendorList}
+        contentContainerStyle={[styles.list, styles.listContent]}
         data={rows}
         keyExtractor={(i) => i.id}
-        ListHeaderComponent={
-          <View style={styles.headerWrap}>
-            <View style={styles.topRow}>
-              <Pressable style={styles.topIconBtn}>
-                <Text style={styles.topIcon}>☰</Text>
-              </Pressable>
-              <Text style={styles.topTitle}>Vendors</Text>
-              <View style={styles.topRight}>
-                <Pressable style={styles.topIconBtn}>
-                  <Text style={styles.topIcon}>◌</Text>
-                </Pressable>
-                <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                  <Text style={styles.avatarText}>AS</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={styles.searchRow}>
-              <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>⌕</Text>
-                <Text style={styles.searchText}>Search vendors...</Text>
-              </View>
-              <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
-                <Text style={styles.addInlineBtnText}>+ Add Vendor</Text>
-              </Pressable>
-            </View>
-            <View style={styles.dropdownWrap}>
-              <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-                <Text style={styles.dropdownText}>{rangeLabel}</Text>
-                <Text style={styles.dropdownIcon}>▾</Text>
-              </Pressable>
-            </View>
-            {rangeFilter === "CUSTOM" ? (
-              <View style={styles.customRow}>
-                <Pressable
-                  style={styles.dateBtn}
-                  onPress={() => {
-                    const existing = customFrom ? new Date(customFrom) : new Date();
-                    setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                    setPickerField("from");
-                  }}
-                >
-                  <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.dateBtn}
-                  onPress={() => {
-                    const existing = customTo ? new Date(customTo) : new Date();
-                    setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                    setPickerField("to");
-                  }}
-                >
-                  <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {pickerField ? (
-              <DateTimePicker
-                value={pickerDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(event, selectedDate) => {
-                  if (event.type === "dismissed") {
-                    setPickerField(null);
-                    return;
-                  }
-                  if (selectedDate) {
-                    const formatted = formatYmd(selectedDate);
-                    if (pickerField === "from") setCustomFrom(formatted);
-                    else setCustomTo(formatted);
-                  }
-                  setPickerField(null);
-                }}
-              />
-            ) : null}
-            {listError ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{listError}</Text>
-                <Pressable style={styles.retryBtn} onPress={() => void loadData()}>
-                  <Text style={styles.retryBtnText}>Retry</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        }
         renderItem={({ item, index }) => (
           <Pressable style={styles.vendorCard} onPress={() => navigation.navigate("VendorDetails", { id: item.id })}>
             <View style={styles.vendorIconWrap}>
@@ -318,9 +326,6 @@ export function VendorsScreen() {
             <View style={styles.vendorRight}>
               <Text style={styles.vendorSpendLabel}>Total Spend</Text>
               <Text style={styles.vendorSpendValue}>₹ {item.totals.paid}</Text>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{Number(item.totals.pending || 0) > 0 ? "Active" : "Inactive"}</Text>
-              </View>
               <Pressable style={styles.editBtn} onPress={() => openEditSheet(item)} hitSlop={8}>
                 <Text style={styles.editIcon}>✎</Text>
               </Pressable>
@@ -401,13 +406,15 @@ export function VendorsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.background },
   center: { flex: 1, justifyContent: "center" },
+  screenHeader: { paddingHorizontal: 16, backgroundColor: tokens.color.background },
+  vendorList: { flex: 1 },
   list: {
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 96,
     gap: 12,
     backgroundColor: tokens.color.background,
   },
+  listContent: { flexGrow: 1 },
   form: {},
   formTitle: { fontSize: 17, lineHeight: 24, fontWeight: "600", color: tokens.color.text, marginBottom: 8 },
   meta: { fontSize: 13, color: tokens.color.muted },
@@ -560,13 +567,6 @@ const styles = StyleSheet.create({
   vendorRight: { alignItems: "flex-end", gap: 4 },
   vendorSpendLabel: { fontSize: 10, color: tokens.color.muted },
   vendorSpendValue: { fontSize: 16, color: tokens.color.text, fontWeight: "700" },
-  statusPill: {
-    borderRadius: 10,
-    backgroundColor: "#EAF5EE",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusPillText: { fontSize: 10, color: "#2E7E59", fontWeight: "600" },
   sheetOverlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: {

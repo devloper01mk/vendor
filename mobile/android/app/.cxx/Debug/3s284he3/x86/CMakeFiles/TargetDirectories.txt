@@ -1,6 +1,9 @@
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/CMakeFiles/appmodules.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/CMakeFiles/rebuild_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNVoiceSpec_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/RNVoiceSpec_autolinked_build/CMakeFiles/rebuild_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rnasyncstorage_autolinked_build/CMakeFiles/edit_cache.dir
 /Users/manish/naman/mobile/android/app/.cxx/Debug/3s284he3/x86/rnasyncstorage_autolinked_build/CMakeFiles/rebuild_cache.dir

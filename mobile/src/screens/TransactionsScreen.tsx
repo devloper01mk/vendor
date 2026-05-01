@@ -26,6 +26,8 @@ type Tx = {
   site: { name: string };
   createdBy: { id: string };
   uiType?: "RECEIVED" | "SENT" | "PENDING";
+  brand?: string | null;
+  notes?: string | null;
 };
 
 type ListResp = {
@@ -34,6 +36,35 @@ type ListResp = {
 
 type Nav = NativeStackNavigationProp<AuthedStackParamList>;
 type RangeFilter = "ALL" | "TODAY" | "WEEK" | "MONTH" | "CUSTOM";
+/** User-facing payment status; maps to API `flow` (Completed → SENT). */
+type StatusFilter = "ALL" | "PENDING" | "COMPLETED";
+
+const STATUS_SPECIFIC: Exclude<StatusFilter, "ALL">[] = ["PENDING", "COMPLETED"];
+
+/** Always show every status filter; do not hide options when the current list is filtered. */
+const STATUS_DROPDOWN_OPTIONS: StatusFilter[] = ["ALL", ...STATUS_SPECIFIC];
+
+function statusFilterLabel(f: StatusFilter): string {
+  switch (f) {
+    case "ALL":
+      return "All Status";
+    case "PENDING":
+      return "Pending";
+    case "COMPLETED":
+      return "Completed";
+  }
+}
+
+function statusFilterToApiFlow(f: StatusFilter): "ALL" | "PENDING" | "SENT" {
+  switch (f) {
+    case "ALL":
+      return "ALL";
+    case "PENDING":
+      return "PENDING";
+    case "COMPLETED":
+      return "SENT";
+  }
+}
 
 function formatYmd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -65,12 +96,38 @@ function getRangeQuery(filter: RangeFilter, customFrom: string, customTo: string
   return { from, to: end };
 }
 
-function shortDate(iso: string) {
+function formatEntryDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   } catch {
-    return "";
+    return iso;
   }
+}
+
+function transactionDetailLine(item: Tx): string | null {
+  const parts = [item.brand?.trim(), item.notes?.trim()].filter(
+    (p): p is string => Boolean(p) && p !== item.itemName.trim(),
+  );
+  if (!parts.length) return null;
+  return [...new Set(parts)].join(" · ");
+}
+
+/** Mirrors backend `mapRequirement` uiType: RECEIVED = allocation, PENDING = balance due, SENT = fully paid vendor line. */
+function transactionListStatus(uiType: Tx["uiType"]): {
+  label: "Received" | "Pending" | "Completed";
+  kind: "received" | "pending" | "completed";
+} {
+  const u = uiType ?? "PENDING";
+  if (u === "RECEIVED") return { label: "Received", kind: "received" };
+  if (u === "PENDING") return { label: "Pending", kind: "pending" };
+  return { label: "Completed", kind: "completed" };
 }
 
 export function TransactionsScreen() {
@@ -87,13 +144,13 @@ export function TransactionsScreen() {
   const [customTo, setCustomTo] = useState("");
   const [pickerField, setPickerField] = useState<"from" | "to" | null>(null);
   const [pickerDate, setPickerDate] = useState(new Date());
-  const [typeFilter, setTypeFilter] = useState<"ALL" | "RECEIVED" | "SENT" | "PENDING">("ALL");
-  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const rangeLabel =
     rangeFilter === "ALL"
-      ? "All"
+      ? "All Date"
       : rangeFilter === "TODAY"
         ? "Today"
         : rangeFilter === "WEEK"
@@ -114,7 +171,7 @@ export function TransactionsScreen() {
         const data = await api.get<ListResp>("/requirements", {
           page: "1",
           limit: "100",
-          flow: typeFilter,
+          flow: statusFilterToApiFlow(statusFilter),
           ...range,
         });
         if (!cancelled) setRows(data.items);
@@ -134,7 +191,7 @@ export function TransactionsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token, rangeFilter, customFrom, customTo, typeFilter]);
+  }, [token, rangeFilter, customFrom, customTo, statusFilter]);
 
   useFocusEffect(load);
 
@@ -225,133 +282,174 @@ export function TransactionsScreen() {
 
   return (
     <View style={styles.wrap}>
-      <FlatList
-        removeClippedSubviews={false}
-        contentContainerStyle={[
-          styles.list,
-          { paddingTop: Math.max(insets.top, tokens.space[2]), paddingBottom: tokens.space[5] + 24 },
+      <View
+        style={[
+          styles.screenHeader,
+          { paddingTop: Math.max(insets.top, tokens.space[2]) },
         ]}
-        data={topRows}
-        keyExtractor={(i) => i.id}
-        ListHeaderComponent={
-          <View style={styles.head}>
-            <View style={styles.topRow}>
+      >
+        <View style={styles.head}>
+          <View style={styles.topRow}>
+            <Pressable style={styles.topIconBtn}>
+              <Ionicons name="menu-outline" size={18} color={tokens.color.text} />
+            </Pressable>
+            <Text style={styles.topTitle}>Transactions</Text>
+            <View style={styles.topRight}>
               <Pressable style={styles.topIconBtn}>
-                <Ionicons name="menu-outline" size={18} color={tokens.color.text} />
+                <Ionicons name="notifications-outline" size={16} color={tokens.color.text} />
               </Pressable>
-              <Text style={styles.topTitle}>Transactions</Text>
-              <View style={styles.topRight}>
-                <Pressable style={styles.topIconBtn}>
-                  <Ionicons name="notifications-outline" size={16} color={tokens.color.text} />
-                </Pressable>
-                <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                  <Text style={styles.avatarText}>AS</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={styles.searchRow}>
-              <View style={styles.searchBox}>
-                <Ionicons name="search-outline" size={15} color={tokens.color.muted} />
-                <Text style={styles.searchText}>Search transactions...</Text>
-              </View>
-              <Pressable style={styles.filterBtn}>
-                <Ionicons name="options-outline" size={14} color={tokens.color.text} />
+              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+                <Text style={styles.avatarText}>AS</Text>
               </Pressable>
             </View>
+          </View>
+          <View style={styles.searchRow}>
+            <View style={styles.searchBox}>
+              <Ionicons name="search-outline" size={15} color={tokens.color.muted} />
+              <Text style={styles.searchText}>Search transactions...</Text>
+            </View>
+            <Pressable style={styles.filterBtn}>
+              <Ionicons name="options-outline" size={14} color={tokens.color.text} />
+            </Pressable>
+          </View>
 
-            {err ? (
-              <CardContainer style={styles.banner}>
-                <Text style={styles.bannerTitle}>Could not load</Text>
-                <Text style={styles.bannerMsg}>{err}</Text>
-              </CardContainer>
-            ) : null}
+          {err ? (
+            <CardContainer style={styles.banner}>
+              <Text style={styles.bannerTitle}>Could not load</Text>
+              <Text style={styles.bannerMsg}>{err}</Text>
+            </CardContainer>
+          ) : null}
 
-            <View style={styles.tabRow}>
-              <Pressable style={styles.typeDropdownBtn} onPress={() => setTypeFilterOpen(true)}>
+          <View style={styles.tabRow}>
+            <View style={styles.typeDropdownWrap}>
+              <Pressable
+                style={styles.typeDropdownBtn}
+                onPress={() => {
+                  setFilterOpen(false);
+                  setStatusFilterOpen((v) => !v);
+                }}
+              >
                 <View style={styles.typeLeftWrap}>
                   <Ionicons name="ellipse-outline" size={12} color="#8A7E68" />
-                  <Text style={styles.typeDropdownText}>
-                    {typeFilter === "ALL"
-                      ? "All"
-                      : typeFilter === "RECEIVED"
-                        ? "Received"
-                        : typeFilter === "SENT"
-                          ? "Sent"
-                          : "Pending"}
-                  </Text>
+                  <Text style={styles.typeDropdownText}>{statusFilterLabel(statusFilter)}</Text>
                 </View>
                 <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
               </Pressable>
-              <Pressable style={styles.calendarDropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-                <Ionicons name="calendar-outline" size={12} color="#8A7E68" />
-                <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
-                <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
+              {statusFilterOpen ? (
+                <View style={styles.typeDropdownMenu} pointerEvents="box-none">
+                  {STATUS_DROPDOWN_OPTIONS.map((f) => (
+                    <Pressable
+                      key={f}
+                      style={({ pressed }) => [styles.typeDropdownItem, pressed && styles.pressed]}
+                      onPress={() => {
+                        setStatusFilter(f);
+                        setStatusFilterOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownItemText, statusFilter === f && styles.dropdownItemTextOn]}>
+                        {statusFilterLabel(f)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+            <Pressable
+              style={styles.calendarDropdownBtn}
+              onPress={() => {
+                setStatusFilterOpen(false);
+                setFilterOpen((v) => !v);
+              }}
+            >
+              <Ionicons name="calendar-outline" size={12} color="#8A7E68" />
+              <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
+              <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
+            </Pressable>
+            <Pressable style={styles.actionIconBtn} onPress={handleImport} disabled={importing || exporting}>
+              {importing ? (
+                <ActivityIndicator size="small" color={tokens.color.accent} />
+              ) : (
+                <Ionicons name="download-outline" size={15} color="#5F5342" />
+              )}
+            </Pressable>
+            <Pressable style={styles.actionIconBtn} onPress={handleExport} disabled={importing || exporting}>
+              {exporting ? (
+                <ActivityIndicator size="small" color={tokens.color.accent} />
+              ) : (
+                <Ionicons name="share-outline" size={15} color="#5F5342" />
+              )}
+            </Pressable>
+          </View>
+          {rangeFilter === "CUSTOM" ? (
+            <View style={styles.customRow}>
+              <Pressable
+                style={styles.dateBtn}
+                onPress={() => {
+                  const existing = customFrom ? new Date(customFrom) : new Date();
+                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                  setPickerField("from");
+                }}
+              >
+                <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
               </Pressable>
-              <Pressable style={styles.actionIconBtn} onPress={handleImport} disabled={importing || exporting}>
-                {importing ? (
-                  <ActivityIndicator size="small" color={tokens.color.accent} />
-                ) : (
-                  <Ionicons name="download-outline" size={15} color="#5F5342" />
-                )}
-              </Pressable>
-              <Pressable style={styles.actionIconBtn} onPress={handleExport} disabled={importing || exporting}>
-                {exporting ? (
-                  <ActivityIndicator size="small" color={tokens.color.accent} />
-                ) : (
-                  <Ionicons name="share-outline" size={15} color="#5F5342" />
-                )}
+              <Pressable
+                style={styles.dateBtn}
+                onPress={() => {
+                  const existing = customTo ? new Date(customTo) : new Date();
+                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                  setPickerField("to");
+                }}
+              >
+                <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
               </Pressable>
             </View>
-            {rangeFilter === "CUSTOM" ? (
-              <View style={styles.customRow}>
-                <Pressable
-                  style={styles.dateBtn}
-                  onPress={() => {
-                    const existing = customFrom ? new Date(customFrom) : new Date();
-                    setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                    setPickerField("from");
-                  }}
-                >
-                  <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.dateBtn}
-                  onPress={() => {
-                    const existing = customTo ? new Date(customTo) : new Date();
-                    setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                    setPickerField("to");
-                  }}
-                >
-                  <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {pickerField ? (
-              <DateTimePicker
-                value={pickerDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(event, selectedDate) => {
-                  if (event.type === "dismissed") {
-                    setPickerField(null);
-                    return;
-                  }
-                  if (selectedDate) {
-                    const formatted = formatYmd(selectedDate);
-                    if (pickerField === "from") setCustomFrom(formatted);
-                    else setCustomTo(formatted);
-                  }
+          ) : null}
+          {pickerField ? (
+            <DateTimePicker
+              value={pickerDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(event, selectedDate) => {
+                if (event.type === "dismissed") {
                   setPickerField(null);
-                }}
-              />
-            ) : null}
-          </View>
-        }
+                  return;
+                }
+                if (selectedDate) {
+                  const formatted = formatYmd(selectedDate);
+                  if (pickerField === "from") setCustomFrom(formatted);
+                  else setCustomTo(formatted);
+                }
+                setPickerField(null);
+              }}
+            />
+          ) : null}
+        </View>
+      </View>
+      <FlatList
+        removeClippedSubviews={false}
+        style={styles.txList}
+        data={topRows}
+        keyExtractor={(i) => i.id}
+        contentContainerStyle={[styles.list, styles.listContent, { paddingBottom: tokens.space[5] + 24 }]}
         renderItem={({ item }) => {
           const kind = item.uiType ?? "PENDING";
           const inbound = kind === "RECEIVED";
           const amountValue =
             kind === "RECEIVED" ? item.paidTotal : kind === "SENT" ? item.paidTotal : item.remaining;
+          const detailExtra = transactionDetailLine(item);
+          const txStatus = transactionListStatus(item.uiType);
+          const statusPillStyle =
+            txStatus.kind === "received"
+              ? styles.statusPillReceived
+              : txStatus.kind === "pending"
+                ? styles.statusPillPending
+                : styles.statusPillCompleted;
+          const statusTextStyle =
+            txStatus.kind === "received"
+              ? styles.statusTextReceived
+              : txStatus.kind === "pending"
+                ? styles.statusTextPending
+                : styles.statusTextCompleted;
           return (
             <Pressable style={styles.txCard} onPress={() => navigation.navigate("Payment", { id: item.id })}>
               <View style={styles.txIconWrap}>
@@ -362,19 +460,28 @@ export function TransactionsScreen() {
                 )}
               </View>
               <View style={styles.txMiddle}>
-                <Text style={styles.txTitle} numberOfLines={1}>
-                  {inbound ? "From " : "To "} {item.vendor.name}
+                <Text style={styles.txTitle} numberOfLines={2}>
+                  {item.itemName}
                 </Text>
-                <Text style={styles.txMeta}>Brand/Person</Text>
-                <Text style={styles.txMeta}>{shortDate(item.entryDate)}</Text>
+                <Text style={styles.txMeta} numberOfLines={1}>
+                  {inbound ? "From " : "To "}
+                  {item.vendor.name}
+                  {item.site?.name ? ` · ${item.site.name}` : ""}
+                </Text>
+                {detailExtra ? (
+                  <Text style={styles.txDetail} numberOfLines={2}>
+                    {detailExtra}
+                  </Text>
+                ) : null}
+                <Text style={styles.txDate}>{formatEntryDate(item.entryDate)}</Text>
               </View>
               <View style={styles.txRight}>
                 <Text style={[styles.txAmount, inbound ? styles.positive : styles.negative]}>
                   {inbound ? "+" : "-"}
                   {amountValue}
                 </Text>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusText}>{kind === "PENDING" ? "Pending" : "Completed"}</Text>
+                <View style={[styles.statusPill, statusPillStyle]}>
+                  <Text style={[styles.statusText, statusTextStyle]}>{txStatus.label}</Text>
                 </View>
                 {me?.id && item.createdBy?.id === me.id ? (
                   <Pressable
@@ -409,7 +516,7 @@ export function TransactionsScreen() {
               >
                 <Text style={[styles.dropdownItemText, rangeFilter === f && styles.dropdownItemTextOn]}>
                   {f === "ALL"
-                    ? "All"
+                    ? "All Date"
                     : f === "TODAY"
                       ? "Today"
                       : f === "WEEK"
@@ -423,27 +530,6 @@ export function TransactionsScreen() {
           </View>
         </View>
       </Modal>
-      <Modal visible={typeFilterOpen} transparent animationType="fade" onRequestClose={() => setTypeFilterOpen(false)}>
-        <View style={styles.dropdownOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTypeFilterOpen(false)} />
-          <View style={styles.dropdownSheet}>
-            {(["ALL", "RECEIVED", "SENT", "PENDING"] as const).map((f) => (
-              <Pressable
-                key={f}
-                style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}
-                onPress={() => {
-                  setTypeFilter(f);
-                  setTypeFilterOpen(false);
-                }}
-              >
-                <Text style={[styles.dropdownItemText, typeFilter === f && styles.dropdownItemTextOn]}>
-                  {f === "ALL" ? "All" : f === "RECEIVED" ? "Received" : f === "SENT" ? "Sent" : "Pending"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -451,7 +537,15 @@ export function TransactionsScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", backgroundColor: tokens.color.background },
   wrap: { flex: 1, backgroundColor: tokens.color.background },
+  screenHeader: {
+    paddingHorizontal: tokens.space[2],
+    backgroundColor: tokens.color.background,
+    zIndex: 20,
+    elevation: 12,
+  },
+  txList: { flex: 1, zIndex: 0 },
   list: { paddingHorizontal: tokens.space[2], gap: tokens.space[2] },
+  listContent: { flexGrow: 1 },
   head: { gap: tokens.space[2], marginBottom: tokens.space[1] },
   kicker: {
     fontSize: tokens.textSize.caption,
@@ -501,9 +595,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tabRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  typeDropdownWrap: {
+    flex: 1,
+    position: "relative",
+    zIndex: 40,
+  },
   typeDropdownBtn: {
     height: 36,
-    flex: 1,
+    width: "100%",
     borderRadius: tokens.radius.lg,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
@@ -515,6 +614,23 @@ const styles = StyleSheet.create({
   },
   typeLeftWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
   typeDropdownText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
+  typeDropdownMenu: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 40,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.panel,
+    overflow: "hidden",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  typeDropdownItem: { paddingHorizontal: tokens.space[2], paddingVertical: 10 },
   calendarDropdownBtn: {
     height: 36,
     minWidth: 126,
@@ -624,14 +740,21 @@ const styles = StyleSheet.create({
   txMiddle: { flex: 1 },
   txTitle: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
   txMeta: { fontSize: 11, color: tokens.color.muted, marginTop: 2 },
+  txDetail: { fontSize: 11, color: tokens.color.text, marginTop: 4, lineHeight: 15, opacity: 0.92 },
+  txDate: { fontSize: 11, color: tokens.color.muted, marginTop: 4, fontWeight: "600" },
   txRight: { alignItems: "flex-end", gap: 6 },
   txAmount: { fontSize: 20, fontWeight: "700" },
   statusPill: {
     borderRadius: 10,
-    backgroundColor: "#EAF5EE",
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  statusText: { fontSize: 10, color: "#2E7E59", fontWeight: "600" },
+  statusPillPending: { backgroundColor: "#FDF6E9" },
+  statusPillReceived: { backgroundColor: "#EDE4D6" },
+  statusPillCompleted: { backgroundColor: "#EAF5EE" },
+  statusText: { fontSize: 10, fontWeight: "600" },
+  statusTextPending: { color: "#8C5A2B" },
+  statusTextReceived: { color: "#5F5342" },
+  statusTextCompleted: { color: "#2E7E59" },
   empty: { textAlign: "center", color: tokens.color.muted, marginTop: tokens.space[4], fontSize: tokens.textSize.small, lineHeight: 20 },
 });

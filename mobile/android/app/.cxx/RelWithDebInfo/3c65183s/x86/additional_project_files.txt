@@ -1,3 +1,10 @@
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/RNVoiceSpec-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/ComponentDescriptors.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/EventEmitters.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/Props.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/RNVoiceSpecJSI-generated.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/ShadowNodes.cpp.o
+/Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/RNVoiceSpec_autolinked_build/CMakeFiles/react_codegen_RNVoiceSpec.dir/react/renderer/components/RNVoiceSpec/States.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/ComponentDescriptors.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/EventEmitters.cpp.o
 /Users/manish/naman/mobile/android/app/.cxx/RelWithDebInfo/3c65183s/x86/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir/react/renderer/components/rnasyncstorage/Props.cpp.o

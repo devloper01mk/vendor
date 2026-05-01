@@ -9,6 +9,8 @@ export class ApiError extends Error {
 
 export function createApi(getToken: () => string | null) {
   const REQUEST_TIMEOUT_MS = 12000;
+  const logEnabled = __DEV__;
+
   function safePreview(value: unknown, limit = 1200) {
     if (value === undefined) return undefined;
     try {
@@ -19,8 +21,16 @@ export function createApi(getToken: () => string | null) {
     }
   }
 
+  function responseHeadersToObject(headers: Headers): Record<string, string> {
+    const out: Record<string, string> = {};
+    headers.forEach((value: string, key: string) => {
+      out[key] = value;
+    });
+    return out;
+  }
+
   function logApi(stage: string, details: Record<string, unknown>) {
-    // Keep API diagnostics centralized for all mobile requests.
+    if (!logEnabled) return;
     console.log(`[API ${stage}]`, details);
   }
 
@@ -58,8 +68,8 @@ export function createApi(getToken: () => string | null) {
       method,
       url,
       query: opts?.query,
-      headers: { ...headers, Authorization: token ? "Bearer <redacted>" : undefined },
-      body: safePreview(opts?.body),
+      headersSent: { ...headers, Authorization: token ? "Bearer <redacted>" : undefined },
+      body: opts?.body !== undefined ? safePreview(opts?.body) : undefined,
     });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -83,7 +93,21 @@ export function createApi(getToken: () => string | null) {
     } finally {
       clearTimeout(timeout);
     }
-    if (res.status === 204) return undefined as T;
+    const responseHeaders = responseHeadersToObject(res.headers);
+
+    if (res.status === 204) {
+      logApi("RESPONSE", {
+        method,
+        url,
+        status: res.status,
+        ok: res.ok,
+        durationMs: Date.now() - startedAt,
+        responseHeaders,
+        body: undefined,
+      });
+      return undefined as T;
+    }
+
     const raw = await res.text();
     let parsed: unknown = undefined;
     if (raw) {
@@ -100,6 +124,7 @@ export function createApi(getToken: () => string | null) {
       status: res.status,
       ok: res.ok,
       durationMs: Date.now() - startedAt,
+      responseHeaders,
       body: safePreview(parsed),
     });
 

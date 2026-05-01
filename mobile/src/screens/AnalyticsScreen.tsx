@@ -125,105 +125,113 @@ export function AnalyticsScreen() {
   }
 
   return (
-    <FlatList
-      contentContainerStyle={[styles.list, { paddingTop: Math.max(insets.top, tokens.space[2]) }]}
-      data={data?.siteSpend ?? []}
-      keyExtractor={(i) => i.siteId}
-      ListHeaderComponent={
-        <View style={styles.headerBlock}>
-          <View style={styles.topRow}>
+    <View style={styles.screenWrap}>
+      <View
+        style={[
+          styles.screenHeader,
+          { paddingTop: Math.max(insets.top, tokens.space[2]) },
+        ]}
+      >
+        <View style={styles.topRow}>
+          <Pressable style={styles.topIconBtn}>
+            <Text style={styles.topIcon}>☰</Text>
+          </Pressable>
+          <Text style={styles.topTitle}>Dashboard</Text>
+          <View style={styles.topRight}>
             <Pressable style={styles.topIconBtn}>
-              <Text style={styles.topIcon}>☰</Text>
+              <Text style={styles.topIcon}>◌</Text>
             </Pressable>
-            <Text style={styles.topTitle}>Dashboard</Text>
-            <View style={styles.topRight}>
-              <Pressable style={styles.topIconBtn}>
-                <Text style={styles.topIcon}>◌</Text>
-              </Pressable>
-              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                <Text style={styles.avatarText}>AS</Text>
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.dropdownWrap}>
-            <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-              <Text style={styles.dropdownText}>⌁ {rangeLabel}</Text>
-              <Text style={styles.dropdownIcon}>▾</Text>
+            <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
+              <Text style={styles.avatarText}>AS</Text>
             </Pressable>
-            {filterOpen ? (
-              <View style={styles.dropdownMenu}>
-                {(["ALL", "TODAY", "WEEK", "MONTH", "CUSTOM"] as const).map((f) => (
-                  <Pressable
-                    key={f}
-                    style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}
-                    onPress={() => {
-                      setRangeFilter(f);
-                      setFilterOpen(false);
-                      if (f !== "CUSTOM") {
-                        setPickerField(null);
-                      }
-                    }}
-                  >
-                    <Text style={[styles.dropdownItemText, rangeFilter === f && styles.dropdownItemTextOn]}>
-                      {f === "ALL"
-                        ? "All"
-                        : f === "TODAY"
-                          ? "Today"
-                          : f === "WEEK"
-                            ? "This week"
-                            : f === "MONTH"
-                              ? "This month"
-                              : "Custom"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
           </View>
-          {rangeFilter === "CUSTOM" ? (
-            <View style={styles.customRow}>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customFrom ? new Date(customFrom) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("from");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customTo ? new Date(customTo) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("to");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
-              </Pressable>
+        </View>
+        <View style={styles.dropdownWrap}>
+          <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
+            <Text style={styles.dropdownText}>⌁ {rangeLabel}</Text>
+            <Text style={styles.dropdownIcon}>▾</Text>
+          </Pressable>
+          {filterOpen ? (
+            <View style={styles.dropdownMenu}>
+              {(["ALL", "TODAY", "WEEK", "MONTH", "CUSTOM"] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}
+                  onPress={() => {
+                    setRangeFilter(f);
+                    setFilterOpen(false);
+                    if (f !== "CUSTOM") {
+                      setPickerField(null);
+                    }
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, rangeFilter === f && styles.dropdownItemTextOn]}>
+                    {f === "ALL"
+                      ? "All"
+                      : f === "TODAY"
+                        ? "Today"
+                        : f === "WEEK"
+                          ? "This week"
+                          : f === "MONTH"
+                            ? "This month"
+                            : "Custom"}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
-          {pickerField ? (
-            <DateTimePicker
-              value={pickerDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={(event, selectedDate) => {
-                if (event.type === "dismissed") {
-                  setPickerField(null);
-                  return;
-                }
-                if (selectedDate) {
-                  const formatted = formatYmd(selectedDate);
-                  if (pickerField === "from") setCustomFrom(formatted);
-                  else setCustomTo(formatted);
-                }
-                setPickerField(null);
+        </View>
+        {rangeFilter === "CUSTOM" ? (
+          <View style={styles.customRow}>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customFrom ? new Date(customFrom) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("from");
               }}
-            />
-          ) : null}
-
+            >
+              <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customTo ? new Date(customTo) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("to");
+              }}
+            >
+              <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {pickerField ? (
+          <DateTimePicker
+            value={pickerDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(event, selectedDate) => {
+              if (event.type === "dismissed") {
+                setPickerField(null);
+                return;
+              }
+              if (selectedDate) {
+                const formatted = formatYmd(selectedDate);
+                if (pickerField === "from") setCustomFrom(formatted);
+                else setCustomTo(formatted);
+              }
+              setPickerField(null);
+            }}
+          />
+        ) : null}
+      </View>
+      <FlatList
+        style={styles.dashboardList}
+        contentContainerStyle={[styles.list, styles.listContent]}
+        data={data?.siteSpend ?? []}
+        keyExtractor={(i) => i.siteId}
+        ListHeaderComponent={
+          <View style={styles.headerBlock}>
           <CardContainer style={styles.hero}>
             <View style={styles.heroHeadRow}>
               <View style={styles.heroLeadingIcon}>
@@ -322,31 +330,41 @@ export function AnalyticsScreen() {
 
           <Text style={styles.listSectionTitle}>Paid by site</Text>
         </View>
-      }
-      renderItem={({ item }) => (
-        <ListItem
-          title={item.name}
-          subtitle="Total paid in selected period"
-          amountLabel={item.paid}
-          amountTone="positive"
-          onPress={() => {}}
-          leadingGlyph="◎"
-          showChevron={false}
-        />
-      )}
-      ListEmptyComponent={<Text style={styles.empty}>No analytics data</Text>}
-    />
+        }
+        renderItem={({ item }) => (
+          <ListItem
+            title={item.name}
+            subtitle="Total paid in selected period"
+            amountLabel={item.paid}
+            amountTone="positive"
+            onPress={() => {}}
+            leadingGlyph="◎"
+            showChevron={false}
+          />
+        )}
+        ListEmptyComponent={<Text style={styles.empty}>No analytics data</Text>}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", backgroundColor: tokens.color.background },
+  screenWrap: { flex: 1, backgroundColor: tokens.color.background },
+  screenHeader: {
+    paddingHorizontal: tokens.space[2],
+    backgroundColor: tokens.color.background,
+    gap: tokens.space[2],
+    zIndex: 10,
+  },
+  dashboardList: { flex: 1 },
   list: {
     paddingHorizontal: tokens.space[2],
     paddingBottom: tokens.space[5],
     gap: tokens.space[2],
     backgroundColor: tokens.color.background,
   },
+  listContent: { flexGrow: 1 },
   headerBlock: { gap: tokens.space[2], marginBottom: tokens.space[1] },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topIconBtn: {
