@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate } from "@/core/date-display";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -253,7 +254,7 @@ export default function InvestorPage() {
               <tr key={entry.id}>
                 <td className="px-4 py-3 font-medium text-[#2A2A2A]">{entry.name}</td>
                 <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{entry.amount}</td>
-                <td className="px-4 py-3 tabular-nums text-[#6F6659]">{entry.paymentReceivedDate.slice(0, 10)}</td>
+                <td className="px-4 py-3 tabular-nums text-[#6F6659]">{formatDisplayDate(entry.paymentReceivedDate)}</td>
                 <td className="px-4 py-3 text-[#6F6659]">{entry.paymentMode}</td>
                 <td className="px-4 py-3 text-[#6F6659]">{entry.note || "—"}</td>
                 <td className="px-4 py-3 text-[#6F6659]">

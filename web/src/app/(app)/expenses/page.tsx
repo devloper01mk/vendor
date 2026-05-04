@@ -1,6 +1,7 @@
 "use client";
 
 import type { RequirementRow, VendorRow } from "@/features/expenses/types";
+import { formatDisplayDate, formatDisplayDateTime, formatLocalYmd } from "@/core/date-display";
 import { getApiBaseUrl } from "@/core/config";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -60,8 +61,8 @@ export default function ExpensesPage() {
   const invoiceInputRef = useRef<HTMLInputElement | null>(null);
   const paymentInvoiceInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentInvoiceRequirementId, setPaymentInvoiceRequirementId] = useState<string | null>(null);
-  const from = customRange?.from ? fmtDate(customRange.from) : "";
-  const to = customRange?.to ? fmtDate(customRange.to) : "";
+  const from = customRange?.from ? formatLocalYmd(customRange.from) : "";
+  const to = customRange?.to ? formatLocalYmd(customRange.to) : "";
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -375,7 +376,7 @@ export default function ExpensesPage() {
             }}
           >
             {customRange?.from
-              ? `${fmtDate(customRange.from)}${customRange?.to ? ` → ${fmtDate(customRange.to)}` : ""}`
+              ? `${formatDisplayDate(customRange.from)}${customRange?.to ? ` → ${formatDisplayDate(customRange.to)}` : ""}`
               : "Select date range"}
           </button>
           <button
@@ -469,7 +470,8 @@ export default function ExpensesPage() {
               <div>
                 <p className="text-base font-semibold text-[#2A2A2A]">Select date range</p>
                 <p className="mt-1 text-xs text-[#8D8376]">
-                  {draftRange?.from ? fmtDate(draftRange.from) : "—"} → {draftRange?.to ? fmtDate(draftRange.to) : "—"}
+                  {draftRange?.from ? formatDisplayDate(draftRange.from) : "—"} →{" "}
+                  {draftRange?.to ? formatDisplayDate(draftRange.to) : "—"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -538,7 +540,7 @@ export default function ExpensesPage() {
                 onClick={() => setDetailRow(r)}
               >
                 <td className="px-4 py-3 tabular-nums text-[#7B7265]">
-                  {r.entryDate.slice(0, 10)}
+                  {formatDisplayDate(r.entryDate)}
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-medium">{r.itemName}</div>
@@ -612,7 +614,7 @@ export default function ExpensesPage() {
                 <p className="mt-1 text-xs text-muted">{detailRow.brand ?? "No details"}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Info label="Date" value={detailRow.entryDate.slice(0, 10)} />
+                <Info label="Date" value={formatDisplayDate(detailRow.entryDate)} />
                 <Info label="Status" value={detailRow.status} />
                 <Info label="Brand/Person" value={detailRow.vendor.name} />
                 <Info label="Details" value={detailRow.brand || "—"} />
@@ -811,7 +813,7 @@ export default function ExpensesPage() {
                     {(detailRow.updateLogs ?? []).map((log) => (
                       <div key={log.id} className="rounded-lg border border-line bg-panel-muted p-2">
                         <p className="text-xs text-muted">
-                          {formatDateTime(log.createdAt)} by {log.changedBy.name}
+                          {formatDisplayDateTime(log.createdAt)} by {log.changedBy.name}
                         </p>
                       </div>
                     ))}
@@ -1109,37 +1111,6 @@ export default function ExpensesPage() {
       ) : null}
     </div>
   );
-}
-
-function fmtDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatDisplayDate(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatDateTime(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  }).format(d);
 }
 
 function Info({ label, value }: { label: string; value: string }) {

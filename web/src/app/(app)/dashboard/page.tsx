@@ -1,6 +1,7 @@
 "use client";
 
 import type { DashboardSummary } from "@/features/expenses/types";
+import { formatDisplayDate, formatLocalYmd } from "@/core/date-display";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useQuery } from "@tanstack/react-query";
@@ -44,8 +45,8 @@ export default function DashboardPage() {
 
   const { from, to } = useMemo(
     () => ({
-      from: customRange?.from ? fmtDate(customRange.from) : undefined,
-      to: customRange?.to ? fmtDate(customRange.to) : undefined,
+      from: customRange?.from ? formatLocalYmd(customRange.from) : undefined,
+      to: customRange?.to ? formatLocalYmd(customRange.to) : undefined,
     }),
     [customRange],
   );
@@ -95,7 +96,7 @@ export default function DashboardPage() {
               onClick={() => setPresetOpen((prev) => !prev)}
             >
               {customRange?.from
-                ? `${fmtDate(customRange.from)}${customRange?.to ? ` → ${fmtDate(customRange.to)}` : ""}`
+                ? `${formatDisplayDate(customRange.from)}${customRange?.to ? ` → ${formatDisplayDate(customRange.to)}` : ""}`
                 : "Select date range"}
             </button>
             {presetOpen ? (
@@ -133,7 +134,8 @@ export default function DashboardPage() {
               <div>
                 <p className="text-base font-semibold text-[#2A2A2A]">Select date range</p>
                 <p className="mt-1 text-xs text-[#8D8376]">
-                  {draftRange?.from ? fmtDate(draftRange.from) : "—"} → {draftRange?.to ? fmtDate(draftRange.to) : "—"}
+                  {draftRange?.from ? formatDisplayDate(draftRange.from) : "—"} →{" "}
+                  {draftRange?.to ? formatDisplayDate(draftRange.to) : "—"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -257,7 +259,7 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-[#EEE7DD]">
                   {filteredReceivedPayments.map((p) => (
                     <tr key={p.id}>
-                      <td className="px-4 py-3 tabular-nums text-[#6F6659]">{p.paidAt.slice(0, 10)}</td>
+                      <td className="px-4 py-3 tabular-nums text-[#6F6659]">{formatDisplayDate(p.paidAt)}</td>
                       <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{p.amount}</td>
                       <td className="px-4 py-3 text-[#6F6659]">{p.method || "—"}</td>
                     </tr>
@@ -367,13 +369,6 @@ function Metric({
       <p className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${toneClass}`}>{value}</p>
     </button>
   );
-}
-
-function fmtDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function getPresetRange(preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth"): DateRange {

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayDateTime } from "@/core/date-display";
 import { ApiError } from "@/core/api/http";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
@@ -83,7 +84,7 @@ export default function UsersPage() {
   const [addAmount, setAddAmount] = useState("");
   const [addMethod, setAddMethod] = useState("");
   const [addNote, setAddNote] = useState("");
-  const [addPaidAt, setAddPaidAt] = useState("");
+  const [addPaidAt, setAddPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [addPaymentUiError, setAddPaymentUiError] = useState("");
   const q = useQuery({
     queryKey: ["users"],
@@ -147,7 +148,7 @@ export default function UsersPage() {
       setAddAmount("");
       setAddMethod("");
       setAddNote("");
-      setAddPaidAt("");
+      setAddPaidAt(new Date().toISOString().slice(0, 10));
       setAddPaymentUiError("");
     },
   });
@@ -287,7 +288,7 @@ export default function UsersPage() {
                     <span className="text-xs text-muted">{u.isBlocked ? "Inactive" : "Active"}</span>
                   </label>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted">{formatDateTime(u.createdAt)}</td>
+                <td className="px-4 py-3 text-xs text-muted">{formatDisplayDateTime(u.createdAt)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-2">
                     <button type="button" className="btn-secondary" onClick={() => setSelectedUser(u)}>
@@ -415,7 +416,7 @@ export default function UsersPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-sm font-medium">Paid amount: {Number(p.amount).toFixed(2)}</p>
-                          <p className="text-xs text-muted">Paid date: {formatDateTime(p.paidAt)}</p>
+                          <p className="text-xs text-muted">Paid date: {formatDisplayDate(p.paidAt)}</p>
                           <p className="text-xs text-muted">Method: {p.method?.trim() ? p.method : "-"}</p>
                           <p className="text-xs text-muted">Note: {p.note?.trim() ? p.note : "-"}</p>
                         </div>
@@ -639,15 +640,6 @@ export default function UsersPage() {
                 />
               </label>
               <label className="label block">
-                Date
-                <input
-                  className="input-base mt-1 w-full"
-                  type="date"
-                  value={addPaidAt}
-                  onChange={(e) => setAddPaidAt(e.target.value)}
-                />
-              </label>
-              <label className="label block">
                 Method
                 <input className="input-base mt-1 w-full" value={editMethod} onChange={(e) => setEditMethod(e.target.value)} />
               </label>
@@ -707,6 +699,15 @@ export default function UsersPage() {
                 />
               </label>
               <label className="label block">
+                Payment date
+                <input
+                  className="input-base mt-1 w-full"
+                  type="date"
+                  value={addPaidAt}
+                  onChange={(e) => setAddPaidAt(e.target.value)}
+                />
+              </label>
+              <label className="label block">
                 Method
                 <input className="input-base mt-1 w-full" value={addMethod} onChange={(e) => setAddMethod(e.target.value)} />
               </label>
@@ -732,7 +733,7 @@ export default function UsersPage() {
                   setAddPaymentUiError("");
                   addPayment.mutate({
                     amount,
-                    paidAt: addPaidAt ? new Date(addPaidAt).toISOString() : undefined,
+                    paidAt: new Date(`${addPaidAt}T12:00:00`).toISOString(),
                     method: addMethod,
                     note: addNote,
                   });
@@ -749,19 +750,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-function formatDateTime(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  }).format(d);
-}
-
