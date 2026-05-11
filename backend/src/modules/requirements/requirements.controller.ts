@@ -85,7 +85,7 @@ export class RequirementsController {
   }
 
   @Delete(":id")
-  @Roles(UserRole.MEMBER)
+  @Roles(UserRole.ADMIN)
   remove(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.requirements.remove(id, user);
   }

@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, RequirementStatus } from "@prisma/client";
+import { Prisma, RequirementStatus, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AddPaymentDto } from "./dto/add-payment.dto";
 import { CreateRequirementDto } from "./dto/create-requirement.dto";
@@ -20,6 +20,28 @@ type InvoiceFileMeta = {
 
 const INTERNAL_MEMBER_ALLOCATION_ITEM = "Member Fund Allocation";
 
+/** Include graph for API responses that carry `updateLogs` (keep in sync across list/getOne/detail). */
+const REQUIREMENT_DETAIL_INCLUDE = Prisma.validator<Prisma.RequirementInclude>()({
+  vendor: true,
+  site: true,
+  createdBy: { select: { id: true, name: true, email: true } },
+  flaggedBy: { select: { id: true, name: true, email: true } },
+  payments: {
+    include: { recordedBy: { select: { id: true, name: true } } },
+    orderBy: { paidAt: "desc" },
+  },
+  invoice: true,
+  updateLogs: {
+    include: { changedBy: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  },
+});
+
+type RequirementDetailRow = Prisma.RequirementGetPayload<{
+  include: typeof REQUIREMENT_DETAIL_INCLUDE;
+}>;
+
 @Injectable()
 export class RequirementsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -35,19 +57,7 @@ export class RequirementsService {
     );
   }
 
-  private mapRequirement(
-    row: Prisma.RequirementGetPayload<{
-      include: {
-        vendor: true;
-        site: true;
-        createdBy: { select: { id: true; name: true; email: true } };
-        flaggedBy: { select: { id: true; name: true; email: true } };
-        payments: { include: { recordedBy: { select: { id: true; name: true } } } };
-        invoice: true;
-        updateLogs: { include: { changedBy: { select: { id: true; name: true; email: true } } } };
-      };
-    }>,
-  ) {
+  private mapRequirement(row: RequirementDetailRow) {
     const paid = this.sumPayments(row.payments);
     const remaining = row.totalAmount.sub(paid);
     const isInternalAllocation = row.itemName === INTERNAL_MEMBER_ALLOCATION_ITEM;
@@ -153,22 +163,7 @@ export class RequirementsService {
         orderBy: { entryDate: "desc" },
         skip: (page - 1) * limit,
         take: limit,
-        include: {
-          vendor: true,
-          site: true,
-          createdBy: { select: { id: true, name: true, email: true } },
-          flaggedBy: { select: { id: true, name: true, email: true } },
-          payments: {
-            include: { recordedBy: { select: { id: true, name: true } } },
-            orderBy: { paidAt: "desc" },
-          },
-          invoice: true,
-          updateLogs: {
-            include: { changedBy: { select: { id: true, name: true, email: true } } },
-            orderBy: { createdAt: "desc" },
-            take: 10,
-          },
-        },
+        include: REQUIREMENT_DETAIL_INCLUDE,
       }),
     ]);
 
@@ -184,22 +179,7 @@ export class RequirementsService {
   async getOne(id: string, user: RequestUser) {
     const row = await this.prisma.requirement.findUnique({
       where: { id },
-      include: {
-        vendor: true,
-        site: true,
-        createdBy: { select: { id: true, name: true, email: true } },
-        flaggedBy: { select: { id: true, name: true, email: true } },
-        payments: {
-          include: { recordedBy: { select: { id: true, name: true } } },
-          orderBy: { paidAt: "desc" },
-        },
-        invoice: true,
-        updateLogs: {
-          include: { changedBy: { select: { id: true, name: true, email: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
-      },
+      include: REQUIREMENT_DETAIL_INCLUDE,
     });
     if (!row) throw new NotFoundException("Requirement not found");
     if (user.role === "MEMBER" && row.createdBy.id !== user.sub) {
@@ -224,21 +204,7 @@ export class RequirementsService {
         siteId: dto.siteId,
         createdById: userId,
       },
-      include: {
-        vendor: true,
-        site: true,
-        createdBy: { select: { id: true, name: true, email: true } },
-        flaggedBy: { select: { id: true, name: true, email: true } },
-        payments: {
-          include: { recordedBy: { select: { id: true, name: true } } },
-        },
-        invoice: true,
-        updateLogs: {
-          include: { changedBy: { select: { id: true, name: true, email: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
-      },
+      include: REQUIREMENT_DETAIL_INCLUDE,
     });
     return this.mapRequirement(row);
   }
@@ -254,7 +220,7 @@ export class RequirementsService {
           throw new ForbiddenException("You can only update your own entries");
         }
 
-        const updated = await tx.requirement.update({
+        await tx.requirement.update({
           where: { id },
           data: {
             itemName: dto.itemName,
@@ -270,21 +236,6 @@ export class RequirementsService {
             vendorId: dto.vendorId,
             siteId: dto.siteId,
           },
-          include: {
-            vendor: true,
-            site: true,
-            createdBy: { select: { id: true, name: true, email: true } },
-            flaggedBy: { select: { id: true, name: true, email: true } },
-            payments: {
-              include: { recordedBy: { select: { id: true, name: true } } },
-            },
-            invoice: true,
-            updateLogs: {
-              include: { changedBy: { select: { id: true, name: true, email: true } } },
-              orderBy: { createdAt: "desc" },
-              take: 10,
-            },
-          },
         });
 
         await tx.requirementUpdateLog.create({
@@ -292,6 +243,7 @@ export class RequirementsService {
             requirementId: id,
             changedById: userId,
             previousData: {
+              action: "REQUIREMENT_EDIT",
               itemName: previous.itemName,
               brand: previous.brand,
               quantity: previous.quantity.toString(),
@@ -306,7 +258,12 @@ export class RequirementsService {
           },
         });
 
-        return updated;
+        const fresh = await tx.requirement.findUnique({
+          where: { id },
+          include: REQUIREMENT_DETAIL_INCLUDE,
+        });
+        if (!fresh) throw new NotFoundException("Requirement not found");
+        return fresh;
       });
       return this.mapRequirement(row);
     } catch (error) {
@@ -342,35 +299,20 @@ export class RequirementsService {
             flaggedAt: null,
             flaggedById: null,
           },
-      include: {
-        vendor: true,
-        site: true,
-        createdBy: { select: { id: true, name: true, email: true } },
-        flaggedBy: { select: { id: true, name: true, email: true } },
-        payments: {
-          include: { recordedBy: { select: { id: true, name: true } } },
-          orderBy: { paidAt: "desc" },
-        },
-        invoice: true,
-        updateLogs: {
-          include: { changedBy: { select: { id: true, name: true, email: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
-      },
+      include: REQUIREMENT_DETAIL_INCLUDE,
     });
     return this.mapRequirement(row);
   }
 
   async remove(id: string, user: RequestUser) {
+    if (user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException("Only administrators can delete transactions");
+    }
     const existing = await this.prisma.requirement.findUnique({
       where: { id },
-      select: { createdById: true },
+      select: { id: true },
     });
     if (!existing) throw new NotFoundException("Requirement not found");
-    if (user.role === "MEMBER" && existing.createdById !== user.sub) {
-      throw new ForbiddenException("You can only delete your own entries");
-    }
 
     try {
       await this.prisma.requirement.delete({ where: { id } });
@@ -420,6 +362,22 @@ export class RequirementsService {
       });
     }
 
+    await this.prisma.requirementUpdateLog.create({
+      data: {
+        requirementId,
+        changedById: user.sub,
+        previousData: {
+          action: "PAYMENT_ADDED",
+          amount: dto.amount,
+          method: dto.method ?? null,
+          note: dto.note ?? null,
+          paidAt: (dto.paidAt ? new Date(dto.paidAt) : new Date()).toISOString(),
+          requirementStatusBefore: req.status,
+          paidTotalBefore: paid.toString(),
+        },
+      },
+    });
+
     return this.getOne(requirementId, { sub: user.sub, role: user.role, email: user.email });
   }
 
@@ -436,6 +394,13 @@ export class RequirementsService {
       throw new ForbiddenException("You can only update payments for your own entries");
     }
 
+    const paymentBefore = {
+      amount: payment.amount.toString(),
+      paidAt: payment.paidAt.toISOString(),
+      method: payment.method,
+      note: payment.note,
+    };
+
     await this.prisma.payment.update({
       where: { id: paymentId },
       data: {
@@ -443,6 +408,18 @@ export class RequirementsService {
         paidAt: dto.paidAt ? new Date(dto.paidAt) : undefined,
         method: dto.method !== undefined ? dto.method : undefined,
         note: dto.note !== undefined ? dto.note : undefined,
+      },
+    });
+
+    await this.prisma.requirementUpdateLog.create({
+      data: {
+        requirementId: payment.requirementId,
+        changedById: user.sub,
+        previousData: {
+          action: "PAYMENT_UPDATED",
+          paymentId,
+          before: paymentBefore,
+        },
       },
     });
 
@@ -512,6 +489,18 @@ export class RequirementsService {
     await this.prisma.requirement.update({
       where: { id: requirementId },
       data: { billReceived: true },
+    });
+
+    await this.prisma.requirementUpdateLog.create({
+      data: {
+        requirementId,
+        changedById: userId,
+        previousData: {
+          action: existing ? "INVOICE_REPLACED" : "INVOICE_ATTACHED",
+          billReceivedBefore: req.billReceived,
+          originalName: file.originalName,
+        },
+      },
     });
 
     return this.getOne(requirementId, { sub: userId, role: "MEMBER", email: "" });

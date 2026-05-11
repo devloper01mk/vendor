@@ -20,6 +20,250 @@ type ListResponse = {
 
 type RequirementsQueryCache = [unknown[], ListResponse | undefined][];
 
+type UpdateLogEntry = NonNullable<RequirementRow["updateLogs"]>[number];
+
+type LogTableRow = { field: string; previous: string; current: string };
+
+/** Resolve stored vendor/site UUIDs to labels for update-log tables. */
+type IdNameMaps = { vendorNameById: Map<string, string>; siteNameById: Map<string, string> };
+
+const emptyIdNameMaps: IdNameMaps = {
+  vendorNameById: new Map(),
+  siteNameById: new Map(),
+};
+
+function resolveVendorDisplay(vendorId: string, row: RequirementRow, vendorNameById: Map<string, string>): string {
+  const id = vendorId.trim();
+  if (!id) return "—";
+  if (id === row.vendor.id) return row.vendor.name;
+  return vendorNameById.get(id) ?? id;
+}
+
+function resolveSiteDisplay(siteId: string, row: RequirementRow, siteNameById: Map<string, string>): string {
+  const id = siteId.trim();
+  if (!id) return "—";
+  if (id === row.site.id) return row.site.name;
+  return siteNameById.get(id) ?? id;
+}
+
+function logEventLabel(pd: Record<string, unknown>): string {
+  const action = typeof pd.action === "string" ? pd.action : undefined;
+  if (action === "PAYMENT_ADDED") return "Payment recorded";
+  if (action === "PAYMENT_UPDATED") return "Payment updated";
+  if (action === "INVOICE_ATTACHED") return "Invoice attached";
+  if (action === "INVOICE_REPLACED") return "Invoice replaced";
+  if (action === "REQUIREMENT_EDIT" || pd.itemName !== undefined) return "Expense fields edited";
+  return "Update";
+}
+
+function cellsEffectivelyEqual(a: string, b: string): boolean {
+  const ta = a.trim();
+  const tb = b.trim();
+  if (ta === tb) return true;
+  const na = Number(ta.replace(/,/g, ""));
+  const nb = Number(tb.replace(/,/g, ""));
+  if (Number.isFinite(na) && Number.isFinite(nb) && Math.abs(na - nb) < 1e-6) return true;
+  return false;
+}
+
+function isRequirementBodySnapshot(pd: Record<string, unknown>): boolean {
+  if (pd.action === "REQUIREMENT_EDIT") return true;
+  return pd.itemName !== undefined && pd.totalAmount !== undefined;
+}
+
+function requirementDetailToSnapshot(row: RequirementRow): Record<string, string> {
+  return {
+    "Item name": row.itemName,
+    "Details / brand": row.brand ?? "—",
+    Quantity: row.quantity,
+    "Total amount": row.totalAmount,
+    Status: row.status,
+    "Bill received": row.billReceived ? "Yes" : "No",
+    "Entry date": row.entryDate.slice(0, 10),
+    Notes: row.notes?.trim() ? row.notes : "—",
+    "Brand/person": row.vendor.name,
+    Site: row.site.name,
+  };
+}
+
+function requirementPreviousDataToSnapshot(
+  pd: Record<string, unknown>,
+  row: RequirementRow,
+  maps: IdNameMaps,
+): Record<string, string> {
+  const vendorId = pd.vendorId != null ? String(pd.vendorId) : "";
+  const siteId = pd.siteId != null ? String(pd.siteId) : "";
+  return {
+    "Item name": pd.itemName != null ? String(pd.itemName) : "—",
+    "Details / brand": pd.brand != null ? String(pd.brand) : "—",
+    Quantity: pd.quantity != null ? String(pd.quantity) : "—",
+    "Total amount": pd.totalAmount != null ? String(pd.totalAmount) : "—",
+    Status: pd.status != null ? String(pd.status) : "—",
+    "Bill received": pd.billReceived === true ? "Yes" : pd.billReceived === false ? "No" : "—",
+    "Entry date": pd.entryDate != null ? String(pd.entryDate).slice(0, 10) : "—",
+    Notes: pd.notes != null && String(pd.notes).trim() ? String(pd.notes) : "—",
+    "Brand/person": resolveVendorDisplay(vendorId, row, maps.vendorNameById),
+    Site: resolveSiteDisplay(siteId, row, maps.siteNameById),
+  };
+}
+
+/** State of expense fields right after the edit at `logIndex` (logs = newest first). */
+function postEditRequirementSnapshot(
+  logs: NonNullable<RequirementRow["updateLogs"]>,
+  logIndex: number,
+  row: RequirementRow,
+  maps: IdNameMaps,
+): Record<string, string> {
+  if (logIndex <= 0) return requirementDetailToSnapshot(row);
+  for (let j = logIndex - 1; j >= 0; j -= 1) {
+    const pd = logs[j].previousData as Record<string, unknown>;
+    if (isRequirementBodySnapshot(pd)) {
+      return requirementPreviousDataToSnapshot(pd, row, maps);
+    }
+  }
+  return requirementDetailToSnapshot(row);
+}
+
+function buildRequirementEditRows(
+  logs: NonNullable<RequirementRow["updateLogs"]>,
+  logIndex: number,
+  row: RequirementRow,
+  maps: IdNameMaps,
+): LogTableRow[] {
+  const pd = logs[logIndex].previousData as Record<string, unknown>;
+  if (!isRequirementBodySnapshot(pd)) return [];
+  const prevSnap = requirementPreviousDataToSnapshot(pd, row, maps);
+  const currSnap = postEditRequirementSnapshot(logs, logIndex, row, maps);
+  const keys = Array.from(new Set([...Object.keys(prevSnap), ...Object.keys(currSnap)]));
+  const out: LogTableRow[] = [];
+  for (const field of keys) {
+    const previous = prevSnap[field] ?? "—";
+    const current = currSnap[field] ?? "—";
+    if (!cellsEffectivelyEqual(previous, current)) {
+      out.push({ field, previous, current });
+    }
+  }
+  if (out.length === 0) {
+    for (const field of keys) {
+      out.push({
+        field,
+        previous: prevSnap[field] ?? "—",
+        current: currSnap[field] ?? "—",
+      });
+    }
+  }
+  return out;
+}
+
+function buildPaymentAddedRows(pd: Record<string, unknown>, logIndex: number, row: RequirementRow): LogTableRow[] {
+  const amt = pd.amount != null ? String(pd.amount) : "—";
+  const paidBefore = pd.paidTotalBefore != null ? String(pd.paidTotalBefore) : "—";
+  const statusBefore =
+    pd.requirementStatusBefore != null ? String(pd.requirementStatusBefore) : "—";
+  const nb = Number(paidBefore.replace(/,/g, ""));
+  const na = Number(amt.replace(/,/g, ""));
+  const runningAfter =
+    Number.isFinite(nb) && Number.isFinite(na) ? (nb + na).toFixed(2) : "—";
+  const rows: LogTableRow[] = [
+    { field: "Payment amount", previous: "—", current: amt },
+    { field: "Running paid total", previous: paidBefore, current: runningAfter },
+  ];
+  if (logIndex === 0) {
+    rows.push({ field: "Requirement status", previous: statusBefore, current: row.status });
+  }
+  return rows;
+}
+
+function buildPaymentUpdatedRows(
+  pd: Record<string, unknown>,
+  row: RequirementRow,
+): LogTableRow[] {
+  const before = pd.before as Record<string, unknown> | undefined;
+  const paymentId = typeof pd.paymentId === "string" ? pd.paymentId : "";
+  const pay = row.payments.find((p) => p.id === paymentId);
+  if (!before && !pay) {
+    return [{ field: "Payment", previous: "—", current: "Updated (details unavailable)" }];
+  }
+  const curAmount = pay?.amount ?? "—";
+  const curPaidAt = pay?.paidAt ? pay.paidAt.slice(0, 10) : "—";
+  const curMethod = pay?.method?.trim() ? String(pay.method) : "—";
+  const curNote = pay?.note?.trim() ? String(pay.note) : "—";
+  const rows: LogTableRow[] = [];
+  if (before?.amount != null || pay) {
+    rows.push({
+      field: "Amount",
+      previous: before?.amount != null ? String(before.amount) : "—",
+      current: curAmount,
+    });
+  }
+  rows.push({
+    field: "Paid date",
+    previous: before?.paidAt != null ? String(before.paidAt).slice(0, 10) : "—",
+    current: curPaidAt,
+  });
+  rows.push({
+    field: "Method",
+    previous: before?.method != null && String(before.method).trim() ? String(before.method) : "—",
+    current: curMethod,
+  });
+  rows.push({
+    field: "Note",
+    previous: before?.note != null && String(before.note).trim() ? String(before.note) : "—",
+    current: curNote,
+  });
+  const filtered = rows.filter((r) => !cellsEffectivelyEqual(r.previous, r.current));
+  return filtered.length > 0 ? filtered : rows;
+}
+
+function buildInvoiceRows(pd: Record<string, unknown>, logIndex: number, row: RequirementRow): LogTableRow[] {
+  const action = typeof pd.action === "string" ? pd.action : "";
+  const file = String(pd.originalName ?? "—");
+  const billBefore = pd.billReceivedBefore === true ? "Yes" : pd.billReceivedBefore === false ? "No" : "—";
+  const billAfter =
+    logIndex === 0
+      ? row.billReceived
+        ? "Yes"
+        : "No"
+      : "Yes";
+  return [
+    { field: "Event", previous: "—", current: action.replace(/_/g, " ") },
+    { field: "File name", previous: "—", current: file },
+    { field: "Bill received", previous: billBefore, current: billAfter },
+  ];
+}
+
+function buildLogTableRows(
+  log: UpdateLogEntry,
+  logIndex: number,
+  logs: NonNullable<RequirementRow["updateLogs"]>,
+  row: RequirementRow,
+  maps: IdNameMaps = emptyIdNameMaps,
+): LogTableRow[] {
+  const pd = log.previousData as Record<string, unknown>;
+  const action = typeof pd.action === "string" ? pd.action : undefined;
+
+  if (action === "PAYMENT_ADDED") {
+    return buildPaymentAddedRows(pd, logIndex, row);
+  }
+  if (action === "PAYMENT_UPDATED") {
+    return buildPaymentUpdatedRows(pd, row);
+  }
+  if (action === "INVOICE_ATTACHED" || action === "INVOICE_REPLACED") {
+    return buildInvoiceRows(pd, logIndex, row);
+  }
+  if (isRequirementBodySnapshot(pd)) {
+    return buildRequirementEditRows(logs, logIndex, row, maps);
+  }
+  const raw = JSON.stringify(pd);
+  return [
+    {
+      field: "Raw payload",
+      previous: "—",
+      current: raw.length > 200 ? `${raw.slice(0, 200)}…` : raw,
+    },
+  ];
+}
+
 export default function ExpensesPage() {
   const api = useApi();
   const qc = useQueryClient();
@@ -27,6 +271,7 @@ export default function ExpensesPage() {
   const token = useAuthStore((s) => s.token);
   const isReadOnly = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
   const canManageFlags = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
+  const canDeleteTransaction = user?.role === "ADMIN";
   const [vendorId, setVendorId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -61,6 +306,8 @@ export default function ExpensesPage() {
   const invoiceInputRef = useRef<HTMLInputElement | null>(null);
   const paymentInvoiceInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentInvoiceRequirementId, setPaymentInvoiceRequirementId] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteUiError, setDeleteUiError] = useState("");
   const from = customRange?.from ? formatLocalYmd(customRange.from) : "";
   const to = customRange?.to ? formatLocalYmd(customRange.to) : "";
 
@@ -73,6 +320,13 @@ export default function ExpensesPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [calendarOpen]);
 
+  useEffect(() => {
+    if (!detailRow) {
+      setDeleteConfirmOpen(false);
+      setDeleteUiError("");
+    }
+  }, [detailRow]);
+
   const vendorsQ = useQuery({
     queryKey: ["vendors"],
     queryFn: () =>
@@ -82,6 +336,29 @@ export default function ExpensesPage() {
     queryKey: ["sites"],
     queryFn: () => api.get<{ id: string; name: string }[]>("/sites"),
   });
+
+  const updateLogNameMaps = useMemo((): IdNameMaps => {
+    const vendorNameById = new Map<string, string>();
+    for (const v of vendorsQ.data ?? []) {
+      vendorNameById.set(v.id, v.name);
+    }
+    const siteNameById = new Map<string, string>();
+    for (const s of sitesQ.data ?? []) {
+      siteNameById.set(s.id, s.name);
+    }
+    return { vendorNameById, siteNameById };
+  }, [vendorsQ.data, sitesQ.data]);
+
+  /** Include the open row’s vendor/site so log IDs always resolve to at least those names. */
+  const updateLogNameMapsForDetail = useMemo((): IdNameMaps => {
+    const vendorNameById = new Map(updateLogNameMaps.vendorNameById);
+    const siteNameById = new Map(updateLogNameMaps.siteNameById);
+    if (detailRow) {
+      vendorNameById.set(detailRow.vendor.id, detailRow.vendor.name);
+      siteNameById.set(detailRow.site.id, detailRow.site.name);
+    }
+    return { vendorNameById, siteNameById };
+  }, [updateLogNameMaps, detailRow]);
 
   const query = useMemo(
     () => ({
@@ -204,6 +481,22 @@ export default function ExpensesPage() {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["requirements"] });
+    },
+  });
+
+  const deleteTransactionMutation = useMutation({
+    mutationFn: (id: string) => api.delete<{ ok: boolean }>(`/requirements/${id}`),
+    onSuccess: async () => {
+      setDetailRow(null);
+      setDeleteConfirmOpen(false);
+      setDeleteUiError("");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["requirements"] }),
+        qc.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+    onError: (err) => {
+      setDeleteUiError(err instanceof Error ? err.message : "Could not delete transaction.");
     },
   });
 
@@ -806,17 +1099,94 @@ export default function ExpensesPage() {
                   </div>
                 </div>
               ) : null}
+              {canDeleteTransaction ? (
+                <div className="rounded-xl border border-red-200/80 bg-red-50/60 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-red-800">Delete transaction</p>
+                  {!deleteConfirmOpen ? (
+                    <button
+                      type="button"
+                      className="btn-secondary mt-2 border-red-300 text-red-900 hover:bg-red-100/80"
+                      onClick={() => {
+                        setDeleteConfirmOpen(true);
+                        setDeleteUiError("");
+                      }}
+                    >
+                      Delete this transaction
+                    </button>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm text-red-950/90">
+                        This permanently removes the expense, all payments, and the invoice record. This cannot be undone.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={deleteTransactionMutation.isPending}
+                          onClick={() => setDeleteConfirmOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl border border-red-700 bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:opacity-60"
+                          disabled={deleteTransactionMutation.isPending}
+                          onClick={() => deleteTransactionMutation.mutate(detailRow.id)}
+                        >
+                          {deleteTransactionMutation.isPending ? "Deleting…" : "Delete permanently"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {deleteUiError ? <p className="mt-2 text-sm text-red-700">{deleteUiError}</p> : null}
+                </div>
+              ) : null}
               {user?.role !== "MEMBER" ? (
                 <div className="rounded-xl border border-line p-3">
                   <p className="text-xs uppercase tracking-wide text-muted">Update logs</p>
-                  <div className="mt-2 space-y-2">
-                    {(detailRow.updateLogs ?? []).map((log) => (
-                      <div key={log.id} className="rounded-lg border border-line bg-panel-muted p-2">
-                        <p className="text-xs text-muted">
-                          {formatDisplayDateTime(log.createdAt)} by {log.changedBy.name}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="mt-2 space-y-4">
+                    {(detailRow.updateLogs ?? []).map((log, logIndex) => {
+                      const logs = detailRow.updateLogs ?? [];
+                      const pd = log.previousData as Record<string, unknown>;
+                      const rows = buildLogTableRows(log, logIndex, logs, detailRow, updateLogNameMapsForDetail);
+                      return (
+                        <div key={log.id} className="rounded-lg border border-line bg-panel-muted p-3">
+                          <p className="text-xs font-medium text-[#2A2A2A]">
+                            {formatDisplayDateTime(log.createdAt)}
+                            <span className="font-normal text-muted">
+                              {" "}
+                              · {log.changedBy.name} · {logEventLabel(pd)}
+                            </span>
+                          </p>
+                          <div className="mt-2 overflow-x-auto rounded-lg border border-line bg-white">
+                            <table className="min-w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-line bg-[#FBF9F5] uppercase tracking-wide text-[#7E7569]">
+                                  <th className="px-3 py-2 font-medium">Field</th>
+                                  <th className="px-3 py-2 font-medium">Previous</th>
+                                  <th className="px-3 py-2 font-medium">Current</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#EEE7DD]">
+                                {rows.map((r, ri) => (
+                                  <tr key={`${log.id}-${ri}`}>
+                                    <td className="whitespace-nowrap px-3 py-2 font-medium text-[#2A2A2A]">
+                                      {r.field}
+                                    </td>
+                                    <td className="max-w-[min(40vw,12rem)] break-words px-3 py-2 text-[#6B6258]">
+                                      {r.previous}
+                                    </td>
+                                    <td className="max-w-[min(40vw,12rem)] break-words px-3 py-2 text-[#2A2A2A]">
+                                      {r.current}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
                     {!detailRow.updateLogs?.length ? <p className="text-sm text-muted">No update logs yet.</p> : null}
                   </div>
                 </div>
