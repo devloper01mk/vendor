@@ -29,8 +29,11 @@ export class AuthService {
     return rest;
   }
 
-  /** Issue JWT + normalized user for password login, Google redirect, and mobile ID token. */
-  async issueSession(user: PublicUser) {
+  /**
+   * Issue JWT + normalized user for password login, Google redirect, and mobile ID token.
+   * Mobile clients use a longer TTL so daily reopen does not force re-login (web stays short-lived).
+   */
+  async issueSession(user: PublicUser, opts?: { longLived: boolean }) {
     const payload = {
       sub: user.id,
       email: user.email,
@@ -39,11 +42,15 @@ export class AuthService {
     };
 
     const signingSecret = process.env.JWT_SECRET ?? "dev-secret-change-me";
-  console.log("[JWT SIGN] secret source:", process.env.JWT_SECRET ? "env" : "fallback");
-  console.log("[JWT SIGN] secret preview:", `${signingSecret.slice(0, 4)}...${signingSecret.slice(-4)}`);
-  console.log("[JWT SIGN] payload:", payload);
-  const accessToken = await this.jwt.signAsync(payload);
-  console.log("[JWT SIGN] token preview:", `${accessToken.slice(0, 20)}...`);
+    console.log("[JWT SIGN] secret source:", process.env.JWT_SECRET ? "env" : "fallback");
+    console.log("[JWT SIGN] secret preview:", `${signingSecret.slice(0, 4)}...${signingSecret.slice(-4)}`);
+    console.log("[JWT SIGN] payload:", payload);
+    const mobileTtl = process.env.JWT_MOBILE_EXPIRES_IN ?? "30d";
+    const accessToken = await this.jwt.signAsync(
+      payload,
+      opts?.longLived ? { expiresIn: mobileTtl } : {},
+    );
+    console.log("[JWT SIGN] token preview:", `${accessToken.slice(0, 20)}...`);
     return { user, accessToken };
   }
 
@@ -52,7 +59,7 @@ export class AuthService {
     if (user.role !== UserRole.MEMBER) {
       throw new UnauthorizedException("Only MEMBER users can log in from the mobile app");
     }
-    return this.issueSession(user);
+    return this.issueSession(user, { longLived: true });
   }
 
   /**
@@ -69,7 +76,7 @@ export class AuthService {
     if ((user as { isBlocked?: boolean }).isBlocked) {
       throw new UnauthorizedException("Account is blocked");
     }
-    return this.issueSession(user);
+    return this.issueSession(user, { longLived: true });
   }
 
   /** Native / Expo apps: exchange Google Sign-In ID token for our JWT. */

@@ -378,7 +378,7 @@ export class RequirementsService {
       },
     });
 
-    return this.getOne(requirementId, { sub: user.sub, role: user.role, email: user.email });
+    return this.getOne(requirementId, user);
   }
 
   async updatePayment(paymentId: string, user: RequestUser, dto: UpdateRequirementPaymentDto) {
