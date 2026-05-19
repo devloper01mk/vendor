@@ -819,6 +819,7 @@ export default function ExpensesPage() {
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Item</th>
               <th className="px-4 py-3 font-medium">Brand/Person</th>
+              <th className="px-4 py-3 font-medium">Site</th>
               <th className="px-4 py-3 font-medium">Details</th>
               <th className="px-4 py-3 font-medium">Total</th>
               <th className="px-4 py-3 font-medium">Paid</th>
@@ -840,6 +841,7 @@ export default function ExpensesPage() {
                   {r.brand ? <div className="text-xs text-[#8D8376]">{r.brand}</div> : null}
                 </td>
                 <td className="px-4 py-3">{r.vendor.name}</td>
+                <td className="px-4 py-3">{r.site.name}</td>
                 <td className="px-4 py-3">{r.brand || "—"}</td>
                 <td className="px-4 py-3 tabular-nums tone-positive">{r.totalAmount}</td>
                 <td className="px-4 py-3 tabular-nums text-[#2A2A2A]">{r.paidTotal}</td>
@@ -910,6 +912,7 @@ export default function ExpensesPage() {
                 <Info label="Date" value={formatDisplayDate(detailRow.entryDate)} />
                 <Info label="Status" value={detailRow.status} />
                 <Info label="Brand/Person" value={detailRow.vendor.name} />
+                <Info label="Site" value={detailRow.site.name} />
                 <Info label="Details" value={detailRow.brand || "—"} />
                 {user?.role !== "MEMBER" ? <Info label="Entry user" value={detailRow.createdBy.name} /> : null}
                 <Info label="Quantity" value={detailRow.quantity} />
