@@ -1,47 +1,88 @@
 "use client";
 
+import { CloseIconButton } from "@/components/ui/CloseIconButton";
+import { DateRangeControls } from "@/components/ui/DateRangeControls";
 import type { DashboardSummary } from "@/features/expenses/types";
 import { formatDisplayDate, formatLocalYmd } from "@/core/date-display";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { useQuery } from "@tanstack/react-query";
-import { DayPicker, type DateRange } from "react-day-picker";
-import "react-day-picker/style.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { DateRange } from "react-day-picker";
+import { useEffect, useMemo, useState } from "react";
+
+type MetricDialogKind = "paid" | "pending" | "committed" | "paidToUsers" | "investor";
+
+function formatBreakdownAmount(value: string) {
+  const n = Number(value);
+  if (!value || Number.isNaN(n) || Math.abs(n) < 0.01) return "—";
+  return value;
+}
+
+function aggregateAmountsByName(items: { name: string; amount: string }[]) {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const key = item.name.trim() || "Unknown";
+    totals.set(key, (totals.get(key) ?? 0) + (Number(item.amount) || 0));
+  }
+  return [...totals.entries()]
+    .map(([name, total]) => ({ name, amount: total.toFixed(2) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getMetricDialogConfig(
+  kind: MetricDialogKind,
+  d: DashboardSummary,
+  vendorRows: NonNullable<DashboardSummary["vendorBreakdown"]>,
+) {
+  if (kind === "paid") {
+    return {
+      title: "Total paid — by vendor",
+      columns: ["Vendor", "Paid amount"] as const,
+      rows: vendorRows.map((v) => ({ name: v.name, amount: formatBreakdownAmount(v.paid) })),
+    };
+  }
+  if (kind === "pending") {
+    return {
+      title: "Pending vendor payments — by vendor",
+      columns: ["Vendor", "Pending amount"] as const,
+      rows: vendorRows.map((v) => ({ name: v.name, amount: formatBreakdownAmount(v.pending) })),
+    };
+  }
+  if (kind === "committed") {
+    return {
+      title: "Total vendor payable — by vendor",
+      columns: ["Vendor", "Payable amount"] as const,
+      rows: vendorRows.map((v) => ({ name: v.name, amount: formatBreakdownAmount(v.committed) })),
+    };
+  }
+  if (kind === "paidToUsers") {
+    return {
+      title: "Paid to users — by member",
+      columns: ["Member", "Total paid"] as const,
+      rows: aggregateAmountsByName(d.userFunding?.payments ?? []).map((r) => ({
+        name: r.name,
+        amount: formatBreakdownAmount(r.amount),
+      })),
+    };
+  }
+  return {
+    title: "Total funds received — by investor",
+    columns: ["Investor", "Total received"] as const,
+    rows: aggregateAmountsByName(d.investor?.entries ?? []).map((r) => ({
+      name: r.name,
+      amount: formatBreakdownAmount(r.amount),
+    })),
+  };
+}
 
 export default function DashboardPage() {
   const api = useApi();
   const user = useAuthStore((s) => s.user);
   const isAdminView = user?.role === "ADMIN" || user?.role === "ACCOUNT_HEAD";
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
-  const [draftRange, setDraftRange] = useState<DateRange | undefined>();
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState<Date | undefined>(undefined);
-  const [presetOpen, setPresetOpen] = useState(false);
   const [receivedDialogOpen, setReceivedDialogOpen] = useState(false);
-  const [receivedFilterDate, setReceivedFilterDate] = useState("");
-  const presetRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!calendarOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setCalendarOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [calendarOpen]);
-
-  useEffect(() => {
-    if (!presetOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      if (!presetRef.current) return;
-      if (!presetRef.current.contains(e.target as Node)) {
-        setPresetOpen(false);
-      }
-    }
-    window.addEventListener("mousedown", onMouseDown);
-    return () => window.removeEventListener("mousedown", onMouseDown);
-  }, [presetOpen]);
+  const [receivedFilterRange, setReceivedFilterRange] = useState<DateRange | undefined>();
+  const [metricDialog, setMetricDialog] = useState<MetricDialogKind | null>(null);
 
   const { from, to } = useMemo(
     () => ({
@@ -54,9 +95,10 @@ export default function DashboardPage() {
   const q = useQuery({
     queryKey: ["dashboard", { from: from ?? "", to: to ?? "" }],
     queryFn: () => api.get<DashboardSummary>("/dashboard/summary", { ...(from ? { from } : {}), ...(to ? { to } : {}) }),
+    placeholderData: keepPreviousData,
   });
 
-  if (q.isLoading) {
+  if (q.isPending && !q.data) {
     return <p className="text-sm text-[#857B6E]">Loading summary...</p>;
   }
   if (q.isError || !q.data) {
@@ -64,136 +106,73 @@ export default function DashboardPage() {
   }
 
   const d = q.data;
-  const filteredReceivedPayments = (d.memberWallet?.receivedPayments ?? []).filter((p) =>
-    receivedFilterDate ? p.paidAt.slice(0, 10) === receivedFilterDate : true,
-  );
-  const applyPreset = (preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth" | "custom") => {
-    if (preset === "custom") {
-      setDraftRange(customRange);
-      setCalendarMonth(customRange?.from ?? new Date());
-      setCalendarOpen(true);
-      setPresetOpen(false);
-      return;
-    }
-    const range = getPresetRange(preset);
-    setCustomRange(range);
-    setDraftRange(range);
-    setPresetOpen(false);
-  };
+  const filteredReceivedPayments = (d.memberWallet?.receivedPayments ?? []).filter((p) => {
+    if (!receivedFilterRange?.from) return true;
+    const paidYmd = p.paidAt.slice(0, 10);
+    const fromYmd = formatLocalYmd(receivedFilterRange.from);
+    if (paidYmd < fromYmd) return false;
+    if (!receivedFilterRange.to) return true;
+    return paidYmd <= formatLocalYmd(receivedFilterRange.to);
+  });
+
+  const vendorRows = d.vendorBreakdown ?? [];
+  const metricDialogConfig = metricDialog ? getMetricDialogConfig(metricDialog, d, vendorRows) : null;
 
   return (
-      <div className="space-y-7">
+    <div className="space-y-7">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-[#2A2A2A]">Dashboard overview</h1>
           <p className="mt-1 text-sm text-[#7C7266]">Clarity-first view of spending, dues, and risk</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="relative" ref={presetRef}>
-            <button
-              type="button"
-              className="w-64 rounded-xl border border-[#E5DED3] bg-white px-3 py-2.5 text-left text-sm text-[#2A2A2A] shadow-sm outline-none transition hover:bg-[#FAF7F2]"
-              onClick={() => setPresetOpen((prev) => !prev)}
-            >
-              {customRange?.from
-                ? `${formatDisplayDate(customRange.from)}${customRange?.to ? ` → ${formatDisplayDate(customRange.to)}` : ""}`
-                : "Select date range"}
-            </button>
-            {presetOpen ? (
-              <div className="absolute z-20 mt-2 w-64 rounded-xl border border-[#E5DED3] bg-white p-1.5 shadow-[0_10px_30px_rgba(21,21,21,0.12)]">
-                <PresetItem label="Today" onClick={() => applyPreset("today")} />
-                <PresetItem label="Yesterday" onClick={() => applyPreset("yesterday")} />
-                <PresetItem label="One Week" onClick={() => applyPreset("week")} />
-                <PresetItem label="This Month" onClick={() => applyPreset("thisMonth")} />
-                <PresetItem label="Last Month" onClick={() => applyPreset("lastMonth")} />
-                <PresetItem label="Custom" onClick={() => applyPreset("custom")} />
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-            onClick={() => {
-              setCustomRange(undefined);
-              setDraftRange(undefined);
-            }}
-          >
-            Clear dates
-          </button>
-        </div>
+        <DateRangeControls customRange={customRange} onRangeChange={setCustomRange} />
       </div>
-      {calendarOpen ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 p-4"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setCalendarOpen(false);
-          }}
-        >
-          <div className="w-full max-w-3xl overflow-hidden rounded-3xl border border-[#E5DED3] bg-white p-0 shadow-[0_4px_10px_rgba(21,21,21,0.08),0_22px_50px_rgba(21,21,21,0.08)]">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[#E5DED3] bg-white p-4">
-              <div>
-                <p className="text-base font-semibold text-[#2A2A2A]">Select date range</p>
-                <p className="mt-1 text-xs text-[#8D8376]">
-                  {draftRange?.from ? formatDisplayDate(draftRange.from) : "—"} →{" "}
-                  {draftRange?.to ? formatDisplayDate(draftRange.to) : "—"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-                  onClick={() => setCalendarOpen(false)}
-                >
-                  Close
-                </button>
-                {draftRange?.from && draftRange?.to ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center rounded-xl bg-[#C8B693] px-4 py-2 text-sm font-medium text-[#2A2A2A] transition hover:brightness-95"
-                    onClick={() => {
-                      setCustomRange(draftRange);
-                      setCalendarOpen(false);
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div className="max-h-[80vh] overflow-auto p-5">
-              <p className="rounded-lg bg-[#F8F5EF] px-3 py-2 text-xs text-[#7A6F61]">
-                {!draftRange?.from
-                  ? "Step 1: Select From date."
-                  : !draftRange?.to
-                    ? "Step 2: Select To date."
-                    : "Step 3: Click Done to apply range."}
-              </p>
-              <div className="mt-4 flex justify-center rounded-2xl border border-[#E5DED3] bg-[#FBF9F5] p-4">
-                <DayPicker
-                  mode="range"
-                  numberOfMonths={2}
-                  month={calendarMonth}
-                  onMonthChange={setCalendarMonth}
-                  selected={draftRange}
-                  onSelect={setDraftRange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Total paid" value={d.totals.paid} tone="positive" />
-        <Metric label="Pending exposure" value={d.totals.pending} tone="negative" />
-        <Metric label="Total" value={d.totals.committed} tone="neutral" />
+        <Metric label="Total paid" value={d.totals.paid} tone="positive" onClick={() => setMetricDialog("paid")} />
+        <Metric
+          label="Pending Vendor Payments"
+          value={d.totals.pending}
+          tone="negative"
+          onClick={() => setMetricDialog("pending")}
+        />
+        <Metric
+          label="Total Vendor Payable"
+          value={d.totals.committed}
+          tone="neutral"
+          onClick={() => setMetricDialog("committed")}
+        />
         {isAdminView ? (
-          <Metric label="Paid to users" value={d.userFunding?.paidToUsers ?? "0"} tone="neutral" />
+          <Metric
+            label="Paid to users"
+            value={d.userFunding?.paidToUsers ?? "0"}
+            tone="neutral"
+            onClick={() => setMetricDialog("paidToUsers")}
+          />
         ) : (
           <Metric label="Tracked items" value={String(d.requirementsTracked ?? 0)} tone="neutral" />
         )}
-        {isAdminView ? <Metric label="TOTAL RECEIVED FROM INVESTOR" value={d.investor?.totalReceived ?? "0"} tone="neutral" /> : null}
+        {isAdminView ? (
+          <Metric
+            label="Total Funds Received"
+            value={d.investor?.totalReceived ?? "0"}
+            tone="neutral"
+            onClick={() => setMetricDialog("investor")}
+          />
+        ) : null}
       </div>
+
+      {metricDialog && metricDialogConfig ? (
+        <MetricBreakdownDialog
+          title={metricDialogConfig.title}
+          columns={[...metricDialogConfig.columns]}
+          rows={metricDialogConfig.rows}
+          customRange={customRange}
+          onRangeChange={setCustomRange}
+          isFetching={q.isFetching}
+          onClose={() => setMetricDialog(null)}
+        />
+      ) : null}
 
       {!isAdminView && d.memberWallet ? (
         <section className="surface p-4">
@@ -205,7 +184,7 @@ export default function DashboardPage() {
               tone="neutral"
               onClick={() => {
                 setReceivedDialogOpen(true);
-                setReceivedFilterDate("");
+                setReceivedFilterRange(undefined);
               }}
             />
             <Metric label="Spent to vendors" value={d.memberWallet.spent} tone="positive" />
@@ -213,6 +192,7 @@ export default function DashboardPage() {
           </div>
         </section>
       ) : null}
+
       {!isAdminView && d.memberWallet && receivedDialogOpen ? (
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/30 p-4"
@@ -221,30 +201,11 @@ export default function DashboardPage() {
           }}
         >
           <div className="surface w-full max-w-3xl p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-[#2A2A2A]">Received from admin</h3>
-              <div className="ml-auto flex items-center gap-2">
-                <input
-                  type="date"
-                  className="input-base h-10 min-w-[180px]"
-                  value={receivedFilterDate}
-                  onChange={(e) => setReceivedFilterDate(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center rounded-lg border border-[#E5DED3] bg-white px-4 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-                  disabled={!receivedFilterDate}
-                  onClick={() => setReceivedFilterDate("")}
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center rounded-xl border border-[#E5DED3] bg-white px-4 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-                  onClick={() => setReceivedDialogOpen(false)}
-                >
-                  Close
-                </button>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="min-w-0 text-base font-semibold text-[#2A2A2A]">Received from admin</h3>
+              <div className="flex shrink-0 items-center gap-2">
+                <DateRangeControls compact customRange={receivedFilterRange} onRangeChange={setReceivedFilterRange} />
+                <CloseIconButton onClick={() => setReceivedDialogOpen(false)} />
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -267,7 +228,7 @@ export default function DashboardPage() {
                 </tbody>
               </table>
               {!filteredReceivedPayments.length ? (
-                <p className="px-4 py-8 text-center text-sm text-[#8A8072]">No received payments for selected date.</p>
+                <p className="px-4 py-8 text-center text-sm text-[#8A8072]">No received payments for selected period.</p>
               ) : null}
             </div>
           </div>
@@ -346,6 +307,75 @@ export default function DashboardPage() {
   );
 }
 
+function MetricBreakdownDialog({
+  title,
+  columns,
+  rows,
+  customRange,
+  onRangeChange,
+  isFetching,
+  onClose,
+}: {
+  title: string;
+  columns: [string, string];
+  rows: { name: string; amount: string }[];
+  customRange: DateRange | undefined;
+  onRangeChange: (range: DateRange | undefined) => void;
+  isFetching?: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/30 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="surface flex max-h-[85vh] w-full max-w-3xl flex-col p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-[#2A2A2A]">{title}</h3>
+            {isFetching ? <p className="mt-1 text-xs text-[#8A8072]">Updating breakdown…</p> : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <DateRangeControls compact customRange={customRange} onRangeChange={onRangeChange} calendarZIndex={120} />
+            <CloseIconButton onClick={onClose} />
+          </div>
+        </div>
+        <div className={`min-h-0 flex-1 overflow-auto ${isFetching ? "opacity-60" : ""}`}>
+          <table className="min-w-full text-left text-sm">
+            <thead className="sticky top-0 border-b border-[#E5DED3] bg-[#FBF9F5] text-xs uppercase tracking-wide text-[#7E7569]">
+              <tr>
+                <th className="px-4 py-3 font-medium">{columns[0]}</th>
+                <th className="px-4 py-3 text-right font-medium">{columns[1]}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EEE7DD]">
+              {rows.map((row) => (
+                <tr key={row.name}>
+                  <td className="px-4 py-3 text-[#2A2A2A]">{row.name}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-[#2A2A2A]">{row.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!rows.length ? (
+            <p className="px-4 py-8 text-center text-sm text-[#8A8072]">No breakdown data for this period.</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -361,49 +391,12 @@ function Metric({
   return (
     <button
       type="button"
-      className={`surface block w-full p-5 text-left ${onClick ? "transition hover:bg-[#FAF7F2]" : ""}`}
+      className={`surface block w-full p-5 text-left ${onClick ? "cursor-pointer transition hover:bg-[#FAF7F2]" : ""}`}
       onClick={onClick}
       disabled={!onClick}
     >
       <p className="text-xs font-medium uppercase tracking-wide text-[#7E7569]">{label}</p>
       <p className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${toneClass}`}>{value}</p>
-    </button>
-  );
-}
-
-function getPresetRange(preset: "today" | "yesterday" | "week" | "thisMonth" | "lastMonth"): DateRange {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  if (preset === "today") return { from: today, to: today };
-  if (preset === "yesterday") {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    return { from: y, to: y };
-  }
-  if (preset === "week") {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { from: start, to: today };
-  }
-  if (preset === "thisMonth") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { from: start, to: end };
-  }
-  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const end = new Date(today.getFullYear(), today.getMonth(), 0);
-  return { from: start, to: end };
-}
-
-function PresetItem({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[#3C352D] transition hover:bg-[#F8F5EF]"
-    >
-      {label}
     </button>
   );
 }

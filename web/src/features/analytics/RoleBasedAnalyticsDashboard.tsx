@@ -11,7 +11,8 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
 import { useMemo, useState } from "react";
 
-export default function AnalyticsPage() {
+/** Reusable analytics shell for embedding outside `/analytics` if needed. */
+export function RoleBasedAnalyticsDashboard() {
   const api = useApi();
   const user = useAuthStore((s) => s.user);
   const isMember = isMemberUser(user?.role);

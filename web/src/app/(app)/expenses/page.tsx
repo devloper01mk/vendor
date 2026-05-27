@@ -6,9 +6,10 @@ import { getApiBaseUrl } from "@/core/config";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { CloseIconButton } from "@/components/ui/CloseIconButton";
+import { DateRangeControls } from "@/components/ui/DateRangeControls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DayPicker, type DateRange } from "react-day-picker";
-import "react-day-picker/style.css";
+import type { DateRange } from "react-day-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type ListResponse = {
@@ -275,9 +276,6 @@ export default function ExpensesPage() {
   const [vendorId, setVendorId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
-  const [draftRange, setDraftRange] = useState<DateRange | undefined>();
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState<Date | undefined>(undefined);
   const [detailRow, setDetailRow] = useState<RequirementRow | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -310,15 +308,6 @@ export default function ExpensesPage() {
   const [deleteUiError, setDeleteUiError] = useState("");
   const from = customRange?.from ? formatLocalYmd(customRange.from) : "";
   const to = customRange?.to ? formatLocalYmd(customRange.to) : "";
-
-  useEffect(() => {
-    if (!calendarOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setCalendarOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [calendarOpen]);
 
   useEffect(() => {
     if (!detailRow) {
@@ -659,29 +648,7 @@ export default function ExpensesPage() {
           <p className="mt-1 text-sm text-[#7C7266]">Clean ledger view with consistent admin styling.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            className="w-64 rounded-xl border border-[#E5DED3] bg-white px-3 py-2.5 text-left text-sm text-[#2A2A2A] shadow-sm outline-none transition hover:bg-[#FAF7F2]"
-            onClick={() => {
-              setDraftRange(customRange);
-              setCalendarMonth(customRange?.from ?? new Date());
-              setCalendarOpen(true);
-            }}
-          >
-            {customRange?.from
-              ? `${formatDisplayDate(customRange.from)}${customRange?.to ? ` → ${formatDisplayDate(customRange.to)}` : ""}`
-              : "Select date range"}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-            onClick={() => {
-              setCustomRange(undefined);
-              setDraftRange(undefined);
-            }}
-          >
-            Clear dates
-          </button>
+          <DateRangeControls customRange={customRange} onRangeChange={setCustomRange} />
           <input
             ref={fileInputRef}
             type="file"
@@ -750,67 +717,6 @@ export default function ExpensesPage() {
           />
         </div>
       </div>
-
-      {calendarOpen ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/30 p-4"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setCalendarOpen(false);
-          }}
-        >
-          <div className="w-full max-w-3xl overflow-hidden rounded-3xl border border-[#E5DED3] bg-white p-0 shadow-[0_4px_10px_rgba(21,21,21,0.08),0_22px_50px_rgba(21,21,21,0.08)]">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[#E5DED3] bg-white p-4">
-              <div>
-                <p className="text-base font-semibold text-[#2A2A2A]">Select date range</p>
-                <p className="mt-1 text-xs text-[#8D8376]">
-                  {draftRange?.from ? formatDisplayDate(draftRange.from) : "—"} →{" "}
-                  {draftRange?.to ? formatDisplayDate(draftRange.to) : "—"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-4 py-2 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-                  onClick={() => setCalendarOpen(false)}
-                >
-                  Close
-                </button>
-                {draftRange?.from && draftRange?.to ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center rounded-xl bg-[#C8B693] px-4 py-2 text-sm font-medium text-[#2A2A2A] transition hover:brightness-95"
-                    onClick={() => {
-                      setCustomRange(draftRange);
-                      setCalendarOpen(false);
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div className="max-h-[80vh] overflow-auto p-5">
-              <p className="rounded-lg bg-[#F8F5EF] px-3 py-2 text-xs text-[#7A6F61]">
-                {!draftRange?.from
-                  ? "Step 1: Select From date."
-                  : !draftRange?.to
-                    ? "Step 2: Select To date."
-                    : "Step 3: Click Done to apply range."}
-              </p>
-              <div className="mt-4 flex justify-center rounded-2xl border border-[#E5DED3] bg-[#FBF9F5] p-4">
-                <DayPicker
-                  mode="range"
-                  numberOfMonths={2}
-                  month={calendarMonth}
-                  onMonthChange={setCalendarMonth}
-                  selected={draftRange}
-                  onSelect={setDraftRange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <div className="surface overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -899,9 +805,7 @@ export default function ExpensesPage() {
           <div className="h-dvh w-full max-w-xl overflow-auto border-l border-line bg-panel">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel px-4 py-3">
               <h3 className="text-base font-semibold">Expense details</h3>
-              <button type="button" className="btn-secondary" onClick={() => setDetailRow(null)}>
-                Close
-              </button>
+              <CloseIconButton onClick={() => setDetailRow(null)} />
             </div>
             <div className="space-y-4 px-4 pt-3 pb-4 text-sm">
               <div className="rounded-xl border border-line bg-panel-muted p-3">
@@ -1377,9 +1281,7 @@ export default function ExpensesPage() {
           <div className="surface w-full max-w-2xl p-4">
             <div className="mb-3 flex items-center justify-between">
               <h4 className="text-base font-semibold">Add expense</h4>
-              <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
-                Close
-              </button>
+              <CloseIconButton onClick={() => setCreateOpen(false)} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="label block">

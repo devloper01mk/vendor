@@ -3,6 +3,7 @@
 import { formatDisplayDate, formatDisplayDateTime } from "@/core/date-display";
 import { ApiError } from "@/core/api/http";
 import { useApi } from "@/core/use-api";
+import { CloseIconButton } from "@/components/ui/CloseIconButton";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -367,9 +368,7 @@ export default function UsersPage() {
                   </svg>
                   Add payment
                 </button>
-                <button type="button" className="btn-secondary" onClick={() => setSelectedUser(null)}>
-                  Close
-                </button>
+                <CloseIconButton onClick={() => setSelectedUser(null)} />
               </div>
             </div>
 

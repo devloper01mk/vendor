@@ -9,6 +9,7 @@ import type { VendorRow } from "@/features/expenses/types";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { CloseIconButton } from "@/components/ui/CloseIconButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -97,13 +98,7 @@ export default function NewExpensePage() {
           >
             Back
           </Link>
-          <button
-            type="button"
-            className="inline-flex items-center rounded-xl border border-[#E5DED3] bg-white px-3 py-1.5 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-            onClick={() => router.push("/expenses")}
-          >
-            Close
-          </button>
+          <CloseIconButton onClick={() => router.push("/expenses")} />
         </div>
         <h1 className="text-3xl font-semibold tracking-tight">New transaction</h1>
         <p className="mt-1 text-sm text-muted">Requirement, optional payment, optional invoice</p>

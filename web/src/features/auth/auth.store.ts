@@ -17,6 +17,10 @@ type State = {
   logout: () => void;
 };
 
+export function useEffectiveRole(): string | undefined {
+  return useAuthStore((s) => s.user?.role);
+}
+
 export const useAuthStore = create<State>()(
   persist(
     (set) => ({

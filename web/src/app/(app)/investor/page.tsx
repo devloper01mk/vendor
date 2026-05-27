@@ -1,10 +1,12 @@
 "use client";
 
+import { DateRangeControls } from "@/components/ui/DateRangeControls";
 import { formatDisplayDate } from "@/core/date-display";
 import { useApi } from "@/core/use-api";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import type { DateRange } from "react-day-picker";
 import { useEffect, useMemo, useState } from "react";
 
 type InvestorEntry = {
@@ -33,7 +35,7 @@ export default function InvestorPage() {
   const [paymentReceivedDate, setPaymentReceivedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMode, setPaymentMode] = useState("");
   const [note, setNote] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+  const [filterRange, setFilterRange] = useState<DateRange | undefined>();
   const [filterPaymentMode, setFilterPaymentMode] = useState("");
   const [uiError, setUiError] = useState("");
   const [uiSuccess, setUiSuccess] = useState("");
@@ -114,7 +116,22 @@ export default function InvestorPage() {
     return Array.from(modes).sort((a, b) => a.localeCompare(b));
   }, [investorsQ.data]);
   const filteredInvestors = (investorsQ.data ?? []).filter((entry) => {
-    const matchesDate = filterDate ? entry.paymentReceivedDate.slice(0, 10) === filterDate : true;
+    const matchesDate =
+      filterRange?.from || filterRange?.to
+        ? (() => {
+            const paidAt = new Date(entry.paymentReceivedDate);
+            const paidAtYmd = new Date(paidAt.getFullYear(), paidAt.getMonth(), paidAt.getDate());
+            if (filterRange?.from) {
+              const from = new Date(filterRange.from.getFullYear(), filterRange.from.getMonth(), filterRange.from.getDate());
+              if (paidAtYmd < from) return false;
+            }
+            if (filterRange?.to) {
+              const to = new Date(filterRange.to.getFullYear(), filterRange.to.getMonth(), filterRange.to.getDate());
+              if (paidAtYmd > to) return false;
+            }
+            return true;
+          })()
+        : true;
     const matchesMode = filterPaymentMode ? entry.paymentMode === filterPaymentMode : true;
     return matchesDate && matchesMode;
   });
@@ -180,15 +197,7 @@ export default function InvestorPage() {
           <p className="mt-1 text-sm text-[#7C7266]">Track investor payments with mode and notes.</p>
         </div>
         <div className="flex flex-wrap items-end justify-start gap-3 lg:justify-end">
-          <label className="text-xs font-medium uppercase tracking-wide text-[#7E7569]">
-            Date filter
-            <input
-              type="date"
-              className="input-base mt-1 min-w-[180px]"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-            />
-          </label>
+          <DateRangeControls compact customRange={filterRange} onRangeChange={setFilterRange} />
           <label className="text-xs font-medium uppercase tracking-wide text-[#7E7569]">
             Payment mode filter
             <select
@@ -204,17 +213,6 @@ export default function InvestorPage() {
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            className="inline-flex h-10 items-center rounded-lg border border-[#E5DED3] bg-white px-4 text-sm font-medium text-[#4E463B] transition hover:bg-[#F8F5EF]"
-            onClick={() => {
-              setFilterDate("");
-              setFilterPaymentMode("");
-            }}
-            disabled={!filterDate && !filterPaymentMode.trim()}
-          >
-            Clear
-          </button>
           <button
             type="button"
             className="inline-flex h-10 items-center rounded-lg bg-[#C8B693] px-4 text-sm font-medium text-[#2A2A2A] transition hover:brightness-95"
@@ -300,7 +298,7 @@ export default function InvestorPage() {
         {investorsQ.isError ? <p className="px-4 py-10 text-center text-sm text-red-600">Could not load investor entries.</p> : null}
         {!investorsQ.isLoading && !investorsQ.isError && !filteredInvestors.length ? (
           <p className="px-4 py-10 text-center text-sm text-[#8A8072]">
-            {filterDate || filterPaymentMode.trim()
+            {(filterRange?.from || filterRange?.to || filterPaymentMode.trim())
               ? "No investor entries for selected filters."
               : "No investor entries yet."}
           </p>

@@ -4,6 +4,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import type { RequestUser } from "../../common/decorators/current-user.decorator";
 
 const INTERNAL_MEMBER_ALLOCATION_ITEM = "Member Fund Allocation";
+const INTERNAL_MEMBER_ALLOCATION_VENDOR = "General Vendor";
 
 @Injectable()
 export class DashboardService {
@@ -120,7 +121,10 @@ export class DashboardService {
           itemName: INTERNAL_MEMBER_ALLOCATION_ITEM,
         },
       },
-      select: { amount: true },
+      select: {
+        amount: true,
+        requirement: { select: { createdBy: { select: { name: true } } } },
+      },
     });
     const totalPaidToUsers = paidToUsersRows.reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
     const investorRows = await this.prisma.investorEntry.findMany({
@@ -133,9 +137,56 @@ export class DashboardService {
               },
             }
           : undefined,
-      select: { amount: true },
+      select: { name: true, amount: true },
+      orderBy: { paymentReceivedDate: "desc" },
     });
     const totalInvestorReceived = investorRows.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0));
+
+    const memberRequirementFilter: Prisma.RequirementWhereInput = {
+      itemName: { not: INTERNAL_MEMBER_ALLOCATION_ITEM },
+      ...(user.role === "MEMBER" ? { createdById: user.sub } : {}),
+      ...(from || to
+        ? {
+            entryDate: {
+              ...(from ? { gte: new Date(from) } : {}),
+              ...(to ? { lte: new Date(to) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const allVendors = await this.prisma.vendor.findMany({
+      where: { name: { not: INTERNAL_MEMBER_ALLOCATION_VENDOR } },
+      orderBy: { name: "asc" },
+      include: {
+        requirements: {
+          where: memberRequirementFilter,
+          select: {
+            totalAmount: true,
+            payments: { select: { amount: true } },
+          },
+        },
+      },
+    });
+
+    const vendorBreakdown = allVendors.map((v) => {
+      let paid = new Prisma.Decimal(0);
+      let committed = new Prisma.Decimal(0);
+      for (const r of v.requirements) {
+        committed = committed.add(r.totalAmount);
+        for (const p of r.payments) {
+          paid = paid.add(p.amount);
+        }
+      }
+      const pending = committed.sub(paid);
+      return {
+        vendorId: v.id,
+        name: v.name,
+        paid: paid.toString(),
+        pending: pending.toString(),
+        committed: committed.toString(),
+      };
+    });
 
     let receivedFromAdmin = new Prisma.Decimal(0);
     let receivedFromAdminRows: {
@@ -174,10 +225,19 @@ export class DashboardService {
       },
       userFunding: {
         paidToUsers: totalPaidToUsers.toString(),
+        payments: paidToUsersRows.map((p) => ({
+          name: p.requirement.createdBy.name,
+          amount: p.amount.toString(),
+        })),
       },
       investor: {
         totalReceived: totalInvestorReceived.toString(),
+        entries: investorRows.map((row) => ({
+          name: row.name,
+          amount: row.amount.toString(),
+        })),
       },
+      vendorBreakdown,
       memberWallet:
         user.role === "MEMBER"
           ? {
