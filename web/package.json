@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "WATCHPACK_POLLING=true next dev --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 4010",
     "lint": "eslint ."
   },
   "dependencies": {
