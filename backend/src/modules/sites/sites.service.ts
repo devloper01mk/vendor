@@ -33,7 +33,7 @@ export class SitesService {
   async list() {
     const rows = await this.prisma.site.findMany({
       where: { name: { not: INTERNAL_MEMBER_ALLOCATION_SITE } },
-      orderBy: { name: "asc" },
+      orderBy: { createdAt: "desc" },
       include: {
         requirements: {
           select: {

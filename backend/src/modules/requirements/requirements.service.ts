@@ -160,7 +160,7 @@ export class RequirementsService {
       this.prisma.requirement.count({ where }),
       this.prisma.requirement.findMany({
         where,
-        orderBy: { entryDate: "desc" },
+        orderBy: [{ entryDate: "desc" }, { createdAt: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
         include: REQUIREMENT_DETAIL_INCLUDE,

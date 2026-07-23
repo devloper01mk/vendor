@@ -66,7 +66,7 @@ export class VendorsService {
             }
           : {}),
       },
-      orderBy: { name: "asc" },
+      orderBy: { createdAt: "desc" },
       include: {
         requirements: {
           where: memberRequirementFilter,
