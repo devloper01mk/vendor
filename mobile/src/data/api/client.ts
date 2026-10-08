@@ -139,10 +139,41 @@ export function createApi(getToken: () => string | null) {
     return parsed as T;
   }
 
+  async function postForm<T>(path: string, formData: FormData): Promise<T> {
+    const url = buildUrl(path);
+    const token = getToken();
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "x-client-platform": "mobile",
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: "POST", headers, body: formData });
+    const raw = await res.text();
+    let parsed: unknown = undefined;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = raw;
+      }
+    }
+    if (!res.ok) {
+      let msg = res.statusText;
+      if (parsed && typeof parsed === "object" && "message" in parsed) {
+        const maybeMessage = (parsed as { message?: unknown }).message;
+        if (typeof maybeMessage === "string") msg = maybeMessage;
+      }
+      throw new ApiError(msg, res.status);
+    }
+    return parsed as T;
+  }
+
   return {
     get: <T>(path: string, query?: Record<string, string | undefined>) =>
       req<T>("GET", path, { query }),
     post: <T>(path: string, body?: unknown) => req<T>("POST", path, { body }),
     patch: <T>(path: string, body?: unknown) => req<T>("PATCH", path, { body }),
+    postForm: <T>(path: string, formData: FormData) => postForm<T>(path, formData),
   };
 }

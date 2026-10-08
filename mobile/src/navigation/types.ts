@@ -9,8 +9,22 @@ export type MainTabParamList = {
 export type AuthedStackParamList = {
   HomeTabs: undefined;
   Settings: undefined;
+  SiteDetails: { id: string };
   VendorDetails: { id: string };
-  AddEntry: undefined;
+  ScopedTransactions: {
+    siteId: string;
+    vendorId: string;
+    siteName: string;
+    vendorName: string;
+  };
+  AddEntry:
+    | {
+        vendorId?: string;
+        siteId?: string;
+        vendorName?: string;
+        siteName?: string;
+      }
+    | undefined;
   EditEntry: { id: string };
   Payment: { id: string };
 };

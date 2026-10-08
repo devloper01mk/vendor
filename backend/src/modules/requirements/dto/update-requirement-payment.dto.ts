@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsDateString, IsNumber, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsDateString, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from "class-validator";
 
 export class UpdateRequirementPaymentDto {
   @Type(() => Number)
@@ -20,4 +20,9 @@ export class UpdateRequirementPaymentDto {
   @IsString()
   @MaxLength(2000)
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["yes", "no"])
+  billStatus?: "yes" | "no";
 }

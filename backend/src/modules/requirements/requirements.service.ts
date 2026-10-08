@@ -146,10 +146,16 @@ export class RequirementsService {
       if (query.to) where.entryDate.lte = new Date(query.to);
     }
     if (query.search) {
-      where.OR = [
-        { itemName: { contains: query.search, mode: "insensitive" } },
-        { brand: { contains: query.search, mode: "insensitive" } },
-      ];
+      const q = query.search.trim();
+      if (q) {
+        where.OR = [
+          { itemName: { contains: q, mode: "insensitive" } },
+          { brand: { contains: q, mode: "insensitive" } },
+          { notes: { contains: q, mode: "insensitive" } },
+          { vendor: { name: { contains: q, mode: "insensitive" } } },
+          { site: { name: { contains: q, mode: "insensitive" } } },
+        ];
+      }
     }
 
     if (user.role === "MEMBER") {
@@ -355,10 +361,17 @@ export class RequirementsService {
       updatedPaid.sub(req.totalAmount).abs().lte(new Prisma.Decimal("0.01")) ||
       updatedPaid.gte(req.totalAmount);
 
+    const requirementPatch: Prisma.RequirementUpdateInput = {};
     if (isComplete && req.status !== RequirementStatus.COMPLETED) {
+      requirementPatch.status = RequirementStatus.COMPLETED;
+    }
+    if (dto.billStatus !== undefined) {
+      requirementPatch.billReceived = dto.billStatus === "yes";
+    }
+    if (Object.keys(requirementPatch).length > 0) {
       await this.prisma.requirement.update({
         where: { id: requirementId },
-        data: { status: RequirementStatus.COMPLETED },
+        data: requirementPatch,
       });
     }
 
@@ -374,6 +387,7 @@ export class RequirementsService {
           paidAt: (dto.paidAt ? new Date(dto.paidAt) : new Date()).toISOString(),
           requirementStatusBefore: req.status,
           paidTotalBefore: paid.toString(),
+          billStatus: dto.billStatus ?? null,
         },
       },
     });
@@ -434,7 +448,15 @@ export class RequirementsService {
         paid.gte(req.totalAmount);
       await this.prisma.requirement.update({
         where: { id: req.id },
-        data: { status: isComplete ? RequirementStatus.COMPLETED : RequirementStatus.PENDING },
+        data: {
+          status: isComplete ? RequirementStatus.COMPLETED : RequirementStatus.PENDING,
+          ...(dto.billStatus !== undefined ? { billReceived: dto.billStatus === "yes" } : {}),
+        },
+      });
+    } else if (dto.billStatus !== undefined) {
+      await this.prisma.requirement.update({
+        where: { id: payment.requirementId },
+        data: { billReceived: dto.billStatus === "yes" },
       });
     }
 

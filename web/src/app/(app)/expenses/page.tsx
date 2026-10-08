@@ -275,6 +275,7 @@ export default function ExpensesPage() {
   const canDeleteTransaction = user?.role === "ADMIN";
   const [vendorId, setVendorId] = useState("");
   const [siteId, setSiteId] = useState("");
+  const [search, setSearch] = useState("");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [detailRow, setDetailRow] = useState<RequirementRow | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -357,8 +358,9 @@ export default function ExpensesPage() {
       ...(siteId ? { siteId } : {}),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
+      ...(search.trim() ? { search: search.trim() } : {}),
     }),
-    [vendorId, siteId, from, to],
+    [vendorId, siteId, from, to, search],
   );
 
   const listQ = useQuery({
@@ -514,12 +516,20 @@ export default function ExpensesPage() {
   });
 
   const addPaymentMutation = useMutation({
-    mutationFn: async (vars: { requirementId: string; amount: number; method?: string; note?: string; paidAt?: string }) =>
+    mutationFn: async (vars: {
+      requirementId: string;
+      amount: number;
+      method?: string;
+      note?: string;
+      paidAt?: string;
+      billStatus?: "yes" | "no";
+    }) =>
       api.post<RequirementRow>(`/requirements/${vars.requirementId}/payments`, {
         amount: vars.amount,
         method: vars.method || undefined,
         note: vars.note || undefined,
         paidAt: vars.paidAt || undefined,
+        billStatus: vars.billStatus,
       }),
     onSuccess: async (updated) => {
       await Promise.all([
@@ -697,6 +707,14 @@ export default function ExpensesPage() {
 
       <div className="rounded-2xl border border-[#E5DED3] bg-white p-3 shadow-[0_1px_2px_rgba(21,21,21,0.06),0_8px_24px_rgba(21,21,21,0.04)]">
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by Item, Brand/Person, Site, Details..."
+            className="h-10 min-w-[260px] flex-1 rounded-lg border border-[#ECE5DA] bg-[#FCFBF8] px-3 text-sm text-[#2A2A2A] outline-none placeholder:text-[#9A9083] focus:border-[#C8B693]"
+            aria-label="Search transactions"
+          />
           <AppSelect
             value={vendorId}
             onChange={setVendorId}
@@ -1209,11 +1227,9 @@ export default function ExpensesPage() {
                         method: payload.method || undefined,
                         note: payload.note || undefined,
                         paidAt: payload.paidAt,
+                        billStatus: paymentBillStatus,
                       })
                       .then(async (updated) => {
-                        await api.patch<RequirementRow>(`/requirements/${detailRow.id}`, {
-                          billStatus: paymentBillStatus,
-                        });
                         setDetailRow(updated);
                         setPaymentOpen(false);
                         setEditingPaymentId(null);
@@ -1240,12 +1256,10 @@ export default function ExpensesPage() {
                       method: payload.method,
                       note: payload.note,
                       paidAt: payload.paidAt,
+                      billStatus: paymentBillStatus,
                     },
                     {
                       onSuccess: async (updated) => {
-                        await api.patch<RequirementRow>(`/requirements/${updated.id}`, {
-                          billStatus: paymentBillStatus,
-                        });
                         if (paymentBillStatus === "yes" && paymentInvoiceFile) {
                           const form = new FormData();
                           form.append("file", paymentInvoiceFile);

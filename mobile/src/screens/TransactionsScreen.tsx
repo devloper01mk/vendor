@@ -1,6 +1,7 @@
-import { createApi } from "@/data/api/client";
-import { ApiError } from "@/data/api/client";
+import { createApi, ApiError } from "@/data/api/client";
+import { formatRupee, formatRupeeWithSign } from "@/core/formatRupee";
 import { CardContainer } from "@/components/ui/CardContainer";
+import { ScreenChrome } from "@/components/ui/ScreenChrome";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
@@ -9,9 +10,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import DocumentPicker from "react-native-document-picker";
-import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { memo, useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, Linking, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { config } from "@/core/config";
 
 type Tx = {
@@ -21,6 +21,7 @@ type Tx = {
   paidTotal: string;
   remaining: string;
   entryDate: string;
+  createdAt?: string;
   isFlagged: boolean;
   vendor: { name: string };
   site: { name: string };
@@ -130,11 +131,89 @@ function transactionListStatus(uiType: Tx["uiType"]): {
   return { label: "Completed", kind: "completed" };
 }
 
+type TxRowProps = {
+  item: Tx;
+  canEdit: boolean;
+  onOpen: (id: string) => void;
+  onEdit: (id: string) => void;
+};
+
+const TxRow = memo(function TxRow({ item, canEdit, onOpen, onEdit }: TxRowProps) {
+  const kind = item.uiType ?? "PENDING";
+  const inbound = kind === "RECEIVED";
+  const detailExtra = transactionDetailLine(item);
+  const txStatus = transactionListStatus(item.uiType);
+  const statusPillStyle =
+    txStatus.kind === "received"
+      ? styles.statusPillReceived
+      : txStatus.kind === "pending"
+        ? styles.statusPillPending
+        : styles.statusPillCompleted;
+  const statusTextStyle =
+    txStatus.kind === "received"
+      ? styles.statusTextReceived
+      : txStatus.kind === "pending"
+        ? styles.statusTextPending
+        : styles.statusTextCompleted;
+  const due = Number(item.remaining) || 0;
+  const hasDue = !inbound && due > 0.01;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.txCard, pressed && styles.txCardPressed]}
+      onPress={() => onOpen(item.id)}
+    >
+      <View style={styles.txMiddle}>
+        <Text style={styles.txTitle} numberOfLines={2}>
+          {item.itemName}
+        </Text>
+        <Text style={styles.txMeta} numberOfLines={1}>
+          {inbound ? "From " : "To "}
+          {item.vendor.name}
+          {item.site?.name ? ` · ${item.site.name}` : ""}
+        </Text>
+        {detailExtra ? (
+          <Text style={styles.txDetail} numberOfLines={2}>
+            {detailExtra}
+          </Text>
+        ) : null}
+        <Text style={styles.txDate}>{formatEntryDate(item.entryDate)}</Text>
+        {!inbound ? (
+          <Text style={styles.moneyLine}>
+            Total {formatRupee(item.totalAmount)} · Paid {formatRupee(item.paidTotal)} · Due{" "}
+            {formatRupee(item.remaining)}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.txRight}>
+        <Text style={[styles.txAmount, inbound ? styles.positive : hasDue ? styles.negative : styles.positive]}>
+          {inbound
+            ? formatRupeeWithSign(item.paidTotal, "+")
+            : hasDue
+              ? formatRupeeWithSign(item.remaining, "-")
+              : formatRupeeWithSign(item.paidTotal, "-")}
+        </Text>
+        <View style={[styles.statusPill, statusPillStyle]}>
+          <Text style={[styles.statusText, statusTextStyle]}>{txStatus.label}</Text>
+        </View>
+        {canEdit ? (
+          <Pressable
+            style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
+            onPress={() => onEdit(item.id)}
+            hitSlop={8}
+          >
+            <Ionicons name="create-outline" size={16} color={tokens.color.muted} />
+          </Pressable>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+});
+
 export function TransactionsScreen() {
   const token = useAuthStore((s) => s.token);
   const me = useAuthStore((s) => s.user);
   const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
   const [rows, setRows] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -148,6 +227,7 @@ export function TransactionsScreen() {
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [search, setSearch] = useState("");
   const rangeLabel =
     rangeFilter === "ALL"
       ? "All Date"
@@ -158,7 +238,45 @@ export function TransactionsScreen() {
           : rangeFilter === "MONTH"
             ? "This month"
             : "Custom";
-  const topRows = useMemo(() => rows.slice(0, 24), [rows]);
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = rows;
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.itemName.toLowerCase().includes(q) ||
+          r.vendor.name.toLowerCase().includes(q) ||
+          (r.site?.name ?? "").toLowerCase().includes(q) ||
+          (r.brand ?? "").toLowerCase().includes(q) ||
+          (r.notes ?? "").toLowerCase().includes(q),
+      );
+    }
+    // Latest first (entry date, then createdAt)
+    return list.slice().sort((a, b) => {
+      const dateA = new Date(a.entryDate).getTime();
+      const dateB = new Date(b.entryDate).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return createdB - createdA;
+    });
+  }, [rows, search]);
+  const listContentStyle = useMemo(
+    () => [styles.list, styles.listContent, { paddingBottom: tokens.space[5] + 24 }],
+    [],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Tx }) => (
+      <TxRow
+        item={item}
+        canEdit={Boolean(me?.id && item.createdBy?.id === me.id)}
+        onOpen={(id) => navigation.navigate("Payment", { id })}
+        onEdit={(id) => navigation.navigate("EditEntry", { id })}
+      />
+    ),
+    [me?.id, navigation],
+  );
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -272,233 +390,167 @@ export function TransactionsScreen() {
     }
   }, [token]);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={tokens.color.accent} />
-      </View>
-    );
-  }
+  const listEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.listLoader}>
+          <ActivityIndicator color={tokens.color.accent} />
+        </View>
+      );
+    }
+    return <Text style={styles.empty}>{err ? "Could not load transactions" : search.trim() ? "No matching transactions" : "No transactions yet. Tap + to add one."}</Text>;
+  }, [loading, err, search]);
 
   return (
     <View style={styles.wrap}>
-      <View
-        style={[
-          styles.screenHeader,
-          { paddingTop: Math.max(insets.top, tokens.space[2]) },
-        ]}
-      >
-        <View style={styles.head}>
-          <View style={styles.topRow}>
-            <Pressable style={styles.topIconBtn}>
-              <Ionicons name="menu-outline" size={18} color={tokens.color.text} />
-            </Pressable>
-            <Text style={styles.topTitle}>Transactions</Text>
-            <View style={styles.topRight}>
-              <Pressable style={styles.topIconBtn}>
-                <Ionicons name="notifications-outline" size={16} color={tokens.color.text} />
-              </Pressable>
-              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                <Text style={styles.avatarText}>AS</Text>
-              </Pressable>
-            </View>
+      <ScreenChrome title="Transactions" onSettingsPress={() => navigation.navigate("Settings")}>
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={15} color={tokens.color.muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search Item, Brand/Person, Site, Details..."
+              placeholderTextColor={tokens.color.placeholder}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
           </View>
-          <View style={styles.searchRow}>
-            <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={15} color={tokens.color.muted} />
-              <Text style={styles.searchText}>Search transactions...</Text>
-            </View>
-            <Pressable style={styles.filterBtn}>
-              <Ionicons name="options-outline" size={14} color={tokens.color.text} />
+        </View>
+
+        {err ? (
+          <CardContainer style={styles.banner}>
+            <Text style={styles.bannerTitle}>Could not load</Text>
+            <Text style={styles.bannerMsg}>{err}</Text>
+            <Pressable style={styles.retryInline} onPress={load}>
+              <Text style={styles.retryInlineText}>Retry</Text>
             </Pressable>
-          </View>
+          </CardContainer>
+        ) : null}
 
-          {err ? (
-            <CardContainer style={styles.banner}>
-              <Text style={styles.bannerTitle}>Could not load</Text>
-              <Text style={styles.bannerMsg}>{err}</Text>
-            </CardContainer>
-          ) : null}
-
-          <View style={styles.tabRow}>
-            <View style={styles.typeDropdownWrap}>
-              <Pressable
-                style={styles.typeDropdownBtn}
-                onPress={() => {
-                  setFilterOpen(false);
-                  setStatusFilterOpen((v) => !v);
-                }}
-              >
-                <View style={styles.typeLeftWrap}>
-                  <Ionicons name="ellipse-outline" size={12} color="#8A7E68" />
-                  <Text style={styles.typeDropdownText}>{statusFilterLabel(statusFilter)}</Text>
-                </View>
-                <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
-              </Pressable>
-              {statusFilterOpen ? (
-                <View style={styles.typeDropdownMenu} pointerEvents="box-none">
-                  {STATUS_DROPDOWN_OPTIONS.map((f) => (
-                    <Pressable
-                      key={f}
-                      style={({ pressed }) => [styles.typeDropdownItem, pressed && styles.pressed]}
-                      onPress={() => {
-                        setStatusFilter(f);
-                        setStatusFilterOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, statusFilter === f && styles.dropdownItemTextOn]}>
-                        {statusFilterLabel(f)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
-            </View>
+        <View style={styles.tabRow}>
+          <View style={styles.typeDropdownWrap}>
             <Pressable
-              style={styles.calendarDropdownBtn}
+              style={styles.typeDropdownBtn}
               onPress={() => {
-                setStatusFilterOpen(false);
-                setFilterOpen((v) => !v);
+                setFilterOpen(false);
+                setStatusFilterOpen((v) => !v);
               }}
             >
-              <Ionicons name="calendar-outline" size={12} color="#8A7E68" />
-              <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
+              <View style={styles.typeLeftWrap}>
+                <Ionicons name="ellipse-outline" size={12} color="#8A7E68" />
+                <Text style={styles.typeDropdownText}>{statusFilterLabel(statusFilter)}</Text>
+              </View>
               <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
             </Pressable>
-            <Pressable style={styles.actionIconBtn} onPress={handleImport} disabled={importing || exporting}>
-              {importing ? (
-                <ActivityIndicator size="small" color={tokens.color.accent} />
-              ) : (
-                <Ionicons name="download-outline" size={15} color="#5F5342" />
-              )}
+            {statusFilterOpen ? (
+              <View style={styles.typeDropdownMenu} pointerEvents="box-none">
+                {STATUS_DROPDOWN_OPTIONS.map((f) => (
+                  <Pressable
+                    key={f}
+                    style={({ pressed }) => [styles.typeDropdownItem, pressed && styles.pressed]}
+                    onPress={() => {
+                      setStatusFilter(f);
+                      setStatusFilterOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, statusFilter === f && styles.dropdownItemTextOn]}>
+                      {statusFilterLabel(f)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+          <Pressable
+            style={styles.calendarDropdownBtn}
+            onPress={() => {
+              setStatusFilterOpen(false);
+              setFilterOpen((v) => !v);
+            }}
+          >
+            <Ionicons name="calendar-outline" size={12} color="#8A7E68" />
+            <Text style={styles.calendarDropdownText}>{rangeLabel}</Text>
+            <Ionicons name="chevron-down" size={13} color={tokens.color.muted} />
+          </Pressable>
+          <Pressable style={styles.actionIconBtn} onPress={handleImport} disabled={importing || exporting}>
+            {importing ? (
+              <ActivityIndicator size="small" color={tokens.color.accent} />
+            ) : (
+              <Ionicons name="download-outline" size={15} color="#5F5342" />
+            )}
+          </Pressable>
+          <Pressable style={styles.actionIconBtn} onPress={handleExport} disabled={importing || exporting}>
+            {exporting ? (
+              <ActivityIndicator size="small" color={tokens.color.accent} />
+            ) : (
+              <Ionicons name="share-outline" size={15} color="#5F5342" />
+            )}
+          </Pressable>
+        </View>
+        {rangeFilter === "CUSTOM" ? (
+          <View style={styles.customRow}>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customFrom ? new Date(customFrom) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("from");
+              }}
+            >
+              <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
             </Pressable>
-            <Pressable style={styles.actionIconBtn} onPress={handleExport} disabled={importing || exporting}>
-              {exporting ? (
-                <ActivityIndicator size="small" color={tokens.color.accent} />
-              ) : (
-                <Ionicons name="share-outline" size={15} color="#5F5342" />
-              )}
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customTo ? new Date(customTo) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("to");
+              }}
+            >
+              <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
             </Pressable>
           </View>
-          {rangeFilter === "CUSTOM" ? (
-            <View style={styles.customRow}>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customFrom ? new Date(customFrom) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("from");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customTo ? new Date(customTo) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("to");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          {pickerField ? (
-            <DateTimePicker
-              value={pickerDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={(event, selectedDate) => {
-                if (event.type === "dismissed") {
-                  setPickerField(null);
-                  return;
-                }
-                if (selectedDate) {
-                  const formatted = formatYmd(selectedDate);
-                  if (pickerField === "from") setCustomFrom(formatted);
-                  else setCustomTo(formatted);
-                }
+        ) : null}
+        {pickerField ? (
+          <DateTimePicker
+            value={pickerDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(event, selectedDate) => {
+              if (event.type === "dismissed") {
                 setPickerField(null);
-              }}
-            />
-          ) : null}
-        </View>
-      </View>
+                return;
+              }
+              if (selectedDate) {
+                const formatted = formatYmd(selectedDate);
+                if (pickerField === "from") setCustomFrom(formatted);
+                else setCustomTo(formatted);
+              }
+              setPickerField(null);
+            }}
+          />
+        ) : null}
+      </ScreenChrome>
       <FlatList
         removeClippedSubviews={false}
         style={styles.txList}
-        data={topRows}
+        data={filteredRows}
         keyExtractor={(i) => i.id}
-        contentContainerStyle={[styles.list, styles.listContent, { paddingBottom: tokens.space[5] + 24 }]}
-        renderItem={({ item }) => {
-          const kind = item.uiType ?? "PENDING";
-          const inbound = kind === "RECEIVED";
-          const amountValue =
-            kind === "RECEIVED" ? item.paidTotal : kind === "SENT" ? item.paidTotal : item.remaining;
-          const detailExtra = transactionDetailLine(item);
-          const txStatus = transactionListStatus(item.uiType);
-          const statusPillStyle =
-            txStatus.kind === "received"
-              ? styles.statusPillReceived
-              : txStatus.kind === "pending"
-                ? styles.statusPillPending
-                : styles.statusPillCompleted;
-          const statusTextStyle =
-            txStatus.kind === "received"
-              ? styles.statusTextReceived
-              : txStatus.kind === "pending"
-                ? styles.statusTextPending
-                : styles.statusTextCompleted;
-          return (
-            <Pressable style={styles.txCard} onPress={() => navigation.navigate("Payment", { id: item.id })}>
-              <View style={styles.txIconWrap}>
-                {inbound ? (
-                  <Ionicons name="arrow-down-outline" size={14} color="#2E7E59" />
-                ) : (
-                  <Ionicons name="arrow-up-outline" size={14} color="#B55050" />
-                )}
-              </View>
-              <View style={styles.txMiddle}>
-                <Text style={styles.txTitle} numberOfLines={2}>
-                  {item.itemName}
-                </Text>
-                <Text style={styles.txMeta} numberOfLines={1}>
-                  {inbound ? "From " : "To "}
-                  {item.vendor.name}
-                  {item.site?.name ? ` · ${item.site.name}` : ""}
-                </Text>
-                {detailExtra ? (
-                  <Text style={styles.txDetail} numberOfLines={2}>
-                    {detailExtra}
-                  </Text>
-                ) : null}
-                <Text style={styles.txDate}>{formatEntryDate(item.entryDate)}</Text>
-              </View>
-              <View style={styles.txRight}>
-                <Text style={[styles.txAmount, inbound ? styles.positive : styles.negative]}>
-                  {inbound ? "+" : "-"}
-                  {amountValue}
-                </Text>
-                <View style={[styles.statusPill, statusPillStyle]}>
-                  <Text style={[styles.statusText, statusTextStyle]}>{txStatus.label}</Text>
-                </View>
-                {me?.id && item.createdBy?.id === me.id ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
-                    onPress={() => navigation.navigate("EditEntry", { id: item.id })}
-                    hitSlop={8}
-                  >
-                    <Ionicons name="pencil-outline" size={12} color={tokens.color.text} />
-                  </Pressable>
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.empty}>{err ? "—" : "No transactions yet. Tap + to add one."}</Text>
+        contentContainerStyle={listContentStyle}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && rows.length > 0}
+            onRefresh={load}
+            colors={[tokens.color.accent]}
+            tintColor={tokens.color.accent}
+          />
         }
+        ItemSeparatorComponent={() => <View style={styles.cardGap} />}
+        ListEmptyComponent={listEmpty}
       />
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
         <View style={styles.dropdownOverlay}>
@@ -535,60 +587,52 @@ export function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: "center", backgroundColor: tokens.color.background },
   wrap: { flex: 1, backgroundColor: tokens.color.background },
-  screenHeader: {
-    paddingHorizontal: tokens.space[2],
-    backgroundColor: tokens.color.background,
-    zIndex: 20,
-    elevation: 12,
-  },
   txList: { flex: 1, zIndex: 0 },
-  list: { paddingHorizontal: tokens.space[2], gap: tokens.space[2] },
+  listLoader: {
+    minHeight: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: tokens.space[5],
+  },
+  list: { paddingHorizontal: tokens.space[2] },
   listContent: { flexGrow: 1 },
-  head: { gap: tokens.space[2], marginBottom: tokens.space[1] },
-  kicker: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "700",
-    color: tokens.color.accent,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  screenTitle: {
-    fontSize: tokens.textSize.hero,
-    fontWeight: "700",
-    color: tokens.color.text,
-    letterSpacing: -0.6,
-    lineHeight: 34,
-  },
+  cardGap: { height: tokens.space[1] },
   screenSub: { fontSize: tokens.textSize.small, color: tokens.color.muted, fontWeight: "500" },
   banner: { gap: tokens.space[1], borderColor: tokens.color.negativeMuted, backgroundColor: tokens.color.negativeMuted },
   bannerTitle: { color: tokens.color.negative, fontWeight: "700", fontSize: tokens.textSize.small },
   bannerMsg: { color: tokens.color.muted, fontSize: tokens.textSize.caption, lineHeight: 18 },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  topIconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  topTitle: { flex: 1, marginLeft: 8, fontSize: tokens.textSize.title, color: tokens.color.text, fontWeight: "600" },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDE4D6", alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
   searchRow: { flexDirection: "row", alignItems: "center", gap: tokens.space[1] },
   searchBox: {
     flex: 1,
     height: 42,
-    borderRadius: tokens.radius.lg,
-    borderWidth: 1,
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
+    gap: 8,
   },
-  searchText: { color: "#A0927B", fontSize: 12 },
+  searchInput: { flex: 1, color: tokens.color.text, fontSize: 12, paddingVertical: 0 },
+  moneyLine: { marginTop: 4, fontSize: 11, color: tokens.color.muted },
+  retryInline: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.panel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+  },
+  retryInlineText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   filterBtn: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     alignItems: "center",
@@ -709,35 +753,32 @@ const styles = StyleSheet.create({
   },
   dateBtnText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   editBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: tokens.radius.md,
+    width: 28,
+    height: 28,
+    borderRadius: tokens.radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: tokens.color.panelMuted,
+    backgroundColor: tokens.color.blockHover,
   },
   editBtnPressed: { opacity: 0.85, backgroundColor: tokens.color.border },
   txCard: {
-    borderWidth: 1,
-    borderColor: tokens.color.border,
-    borderRadius: tokens.radius.lg,
-    backgroundColor: tokens.color.panel,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    backgroundColor: tokens.color.panel,
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+    ...tokens.shadow.card,
   },
-  txIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F4EFE7",
+  txCardPressed: {
+    backgroundColor: tokens.color.blockHover,
   },
-  txMiddle: { flex: 1 },
+  txMiddle: { flex: 1, minWidth: 0 },
   txTitle: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
   txMeta: { fontSize: 11, color: tokens.color.muted, marginTop: 2 },
   txDetail: { fontSize: 11, color: tokens.color.text, marginTop: 4, lineHeight: 15, opacity: 0.92 },

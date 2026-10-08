@@ -1,6 +1,8 @@
 import { CardContainer } from "@/components/ui/CardContainer";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createApi } from "@/data/api/client";
 import { useAuthStore } from "@/features/auth/store";
 import { tokens } from "@/theme/tokens";
@@ -22,6 +24,7 @@ export function SettingsScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<"profile" | "password" | "passcode" | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +84,15 @@ export function SettingsScreen() {
     setStatus("Passcode saved");
   }
 
+  function confirmLogout() {
+    setLogoutOpen(true);
+  }
+
+  function handleLogout() {
+    setLogoutOpen(false);
+    logout();
+  }
+
   return (
     <ScrollView
       contentContainerStyle={[
@@ -110,7 +122,7 @@ export function SettingsScreen() {
         <Text style={styles.chevron}>›</Text>
       </CardContainer>
 
-      <Text style={styles.sectionTitle}>Account</Text>
+      <SectionLabel>Account</SectionLabel>
       <CardContainer style={styles.menuCard}>
         <MenuItem
           icon="◌"
@@ -127,14 +139,12 @@ export function SettingsScreen() {
         <MenuItem icon="⌁" title="Passcode" subtitle="Manage app passcode" onPress={() => setPanel("passcode")} />
       </CardContainer>
 
-      <Text style={styles.sectionTitle}>App & Support</Text>
+      <SectionLabel>App & Support</SectionLabel>
       <CardContainer style={styles.menuCard}>
-        <MenuItem icon="?" title="Help & Support" subtitle="Get help and contact support" onPress={() => {}} />
-        <MenuItem icon="i" title="About App" subtitle="App version and information" onPress={() => {}} />
-        <MenuItem icon="↪" title="Log Out" subtitle="Sign out from your account" onPress={logout} danger />
+        <MenuItem icon="↪" title="Log Out" subtitle="Sign out from your account" onPress={confirmLogout} danger />
       </CardContainer>
 
-      <Text style={styles.version}>Version 1.0.0</Text>
+      <Text style={styles.version}>Version 1.0.1</Text>
       {status ? <Text style={styles.status}>{status}</Text> : null}
 
       <Modal visible={panel !== null} transparent animationType="slide" onRequestClose={() => setPanel(null)}>
@@ -171,6 +181,17 @@ export function SettingsScreen() {
           </CardContainer>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={logoutOpen}
+        title="Log out"
+        message="Are you sure you want to sign out of your account?"
+        cancelLabel="Cancel"
+        confirmLabel="Logout"
+        destructive
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
     </ScrollView>
   );
 }
@@ -212,39 +233,36 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   screenTitle: {
-    fontSize: tokens.textSize.subtitle,
-    fontWeight: "600",
-    color: tokens.color.text,
+    fontSize: tokens.textSize.hero,
+    fontWeight: "700",
+    color: tokens.color.ink,
+    letterSpacing: -0.5,
+    marginBottom: tokens.space[1],
   },
+  menuCard: { paddingVertical: 0 },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space[1],
     padding: tokens.space[2],
+    marginBottom: tokens.space[1],
   },
   avatar: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    backgroundColor: tokens.color.accent,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.sidebar,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: tokens.color.onAccent,
-    fontSize: 22,
+    color: tokens.color.sidebarText,
+    fontSize: 18,
     fontWeight: "700",
   },
   profileMeta: { flex: 1 },
   profileName: { fontSize: 18, fontWeight: "600", color: tokens.color.text },
   profileEmail: { marginTop: 2, fontSize: tokens.textSize.small, color: tokens.color.muted },
-  sectionTitle: {
-    fontSize: 30,
-    fontWeight: "600",
-    color: tokens.color.text,
-    marginTop: 4,
-  },
-  menuCard: { paddingVertical: 0 },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -256,8 +274,8 @@ const styles = StyleSheet.create({
   menuIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 17,
-    backgroundColor: tokens.color.panelMuted,
+    borderRadius: tokens.radius.sm,
+    backgroundColor: tokens.color.blockHover,
     alignItems: "center",
     justifyContent: "center",
   },

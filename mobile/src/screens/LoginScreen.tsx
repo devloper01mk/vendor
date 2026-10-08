@@ -1,26 +1,29 @@
+import { AppIcon } from "@/components/ui/AppIcon";
 import { ApiError, createApi } from "@/data/api/client";
-import { config } from "@/core/config";
-import { DEFAULT_LOGIN_EMAIL, DEFAULT_LOGIN_PASSWORD } from "@/features/auth/defaults";
 import { useAuthStore } from "@/features/auth/store";
 import { tokens } from "@/theme/tokens";
 import { useEffect, useState } from "react";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { config } from "@/core/config";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const setAuth = useAuthStore((s) => s.setAuth);
   const logout = useAuthStore((s) => s.logout);
-  const [email, setEmail] = useState(DEFAULT_LOGIN_EMAIL);
-  const [password, setPassword] = useState(DEFAULT_LOGIN_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -99,109 +102,132 @@ export function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.wrap} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={styles.hero}>
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>⌂</Text>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + tokens.space[3] }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.hero, { paddingTop: insets.top + tokens.space[4] }]}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>RK</Text>
+          </View>
+          <Text style={styles.heroKicker}>Reckon</Text>
+          <Text style={styles.heroTitle}>Welcome back</Text>
+          <Text style={styles.heroSub}>
+            Sign in to continue managing your workspace with a calm, focused experience.
+          </Text>
         </View>
-        <Text style={styles.heroTitle}>Welcome Back!</Text>
-        <Text style={styles.heroSub}>Sign in to continue to your account</Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.title}>Login</Text>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="you@company.com"
-          placeholderTextColor={tokens.color.muted}
-          value={email}
-          onChangeText={setEmail}
-        />
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordWrap}>
-          <TextInput
-            style={styles.passwordInput}
-            secureTextEntry={!showPassword}
-            placeholder="Enter your password"
-            placeholderTextColor={tokens.color.muted}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.eyeBtn, pressed && styles.passwordTogglePressed]}
-            onPress={() => setShowPassword((v) => !v)}
-          >
-            <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
-          </Pressable>
+
+        <View style={styles.formWrap}>
+          <View style={styles.card}>
+            <Text style={styles.title}>Sign in</Text>
+            <Text style={styles.cardHint}>Use your credentials to access your account.</Text>
+
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="you@company.com"
+              placeholderTextColor={tokens.color.placeholder}
+              value={email}
+              onChangeText={setEmail}
+            />
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordWrap}>
+              <TextInput
+                style={styles.passwordInput}
+                secureTextEntry={!showPassword}
+                placeholder="Enter your password"
+                placeholderTextColor={tokens.color.placeholder}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <Pressable
+                style={({ pressed }) => [styles.eyeBtn, pressed && styles.passwordTogglePressed]}
+                onPress={() => setShowPassword((v) => !v)}
+              >
+                <AppIcon
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={tokens.color.muted}
+                />
+              </Pressable>
+            </View>
+            <Pressable style={styles.forgotWrap} onPress={onForgotPassword}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </Pressable>
+            {err ? <Text style={styles.err}>{err}</Text> : null}
+            {info ? <Text style={styles.info}>{info}</Text> : null}
+            <Pressable
+              style={({ pressed }) => [styles.btn, pressed && !busy && styles.btnPressed]}
+              onPress={onLogin}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color={tokens.color.onAccent} />
+              ) : (
+                <Text style={styles.btnText}>Sign in</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
-        <Pressable style={styles.forgotWrap} onPress={onForgotPassword}>
-          <Text style={styles.forgotText}>Forgot password?</Text>
-        </Pressable>
-        {err ? <Text style={styles.err}>{err}</Text> : null}
-        {info ? <Text style={styles.info}>{info}</Text> : null}
-        <Pressable
-          style={({ pressed }) => [styles.btn, pressed && !busy && styles.btnPressed]}
-          onPress={onLogin}
-          disabled={busy}
-        >
-          {busy ? <ActivityIndicator color={tokens.color.onAccent} /> : <Text style={styles.btnText}>Continue</Text>}
-        </Pressable>
-        {/* <Pressable
-          style={({ pressed }) => [styles.googleBtn, pressed && !busy && styles.googlePressed]}
-          onPress={onGoogleLogin}
-          disabled={busy}
-        >
-          <Text style={styles.googleBtnText}>Continue with Google</Text>
-        </Pressable> */}
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    padding: tokens.space[3],
-    backgroundColor: tokens.color.background,
-    justifyContent: "center",
-  },
+  screen: { flex: 1, backgroundColor: tokens.color.background },
+  scroll: { flexGrow: 1 },
   hero: {
-    marginBottom: tokens.space[3],
-    alignItems: "center",
-    backgroundColor: "#F1EBDD",
-    borderRadius: tokens.radius.xl,
-    paddingVertical: tokens.space[3],
-    paddingHorizontal: tokens.space[2],
-    borderWidth: 1,
-    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.sidebar,
+    paddingHorizontal: tokens.space[3],
+    paddingBottom: tokens.space[4],
+    alignItems: "flex-start",
   },
   heroBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 44,
+    height: 44,
+    borderRadius: tokens.radius.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: tokens.color.sidebarElevated,
     borderWidth: 1,
-    borderColor: tokens.color.border,
-    marginBottom: 10,
+    borderColor: tokens.color.sidebarBorder,
+    marginBottom: tokens.space[2],
   },
-  heroBadgeText: { fontSize: 22, color: "#8F7E60", fontWeight: "700" },
-  heroTitle: {
-    fontSize: 22,
+  heroBadgeText: {
+    fontSize: 14,
+    color: tokens.color.sidebarText,
     fontWeight: "700",
-    color: tokens.color.text,
-    letterSpacing: -0.4,
+    letterSpacing: 0.4,
   },
-  heroSub: { marginTop: 4, fontSize: tokens.textSize.small, color: tokens.color.muted, fontWeight: "500" },
-  title: {
-    fontSize: tokens.textSize.title,
+  heroKicker: {
+    fontSize: tokens.textSize.caption,
     fontWeight: "600",
-    color: tokens.color.text,
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    color: tokens.color.sidebarAccent,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+    lineHeight: 36,
+  },
+  heroSub: {
+    marginTop: 10,
+    fontSize: tokens.textSize.small,
+    color: tokens.color.sidebarMuted,
+    lineHeight: 20,
+    maxWidth: 320,
+  },
+  formWrap: {
+    marginTop: -tokens.space[3],
+    paddingHorizontal: tokens.space[3],
   },
   card: {
     borderRadius: tokens.radius.xl,
@@ -209,8 +235,19 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.panel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
-    ...tokens.shadow.card,
+    ...tokens.shadow.elevated,
     gap: 10,
+  },
+  title: {
+    fontSize: tokens.textSize.title,
+    fontWeight: "700",
+    color: tokens.color.text,
+    letterSpacing: -0.3,
+  },
+  cardHint: {
+    fontSize: tokens.textSize.small,
+    color: tokens.color.muted,
+    marginBottom: 4,
   },
   label: {
     fontSize: tokens.textSize.caption,
@@ -227,14 +264,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.space[2],
     paddingVertical: 14,
     fontSize: tokens.textSize.body,
-    backgroundColor: tokens.color.panelMuted,
+    backgroundColor: tokens.color.panel,
     color: tokens.color.text,
   },
   passwordWrap: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
-    backgroundColor: tokens.color.panelMuted,
+    backgroundColor: tokens.color.panel,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -250,26 +287,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  eyeIcon: { color: tokens.color.muted, fontSize: 14 },
   forgotWrap: {
     alignSelf: "flex-start",
     paddingVertical: 4,
   },
   forgotText: {
-    color: tokens.color.accent,
+    color: tokens.color.text,
     fontSize: tokens.textSize.caption,
     fontWeight: "600",
   },
-  err: { color: tokens.color.negative, fontSize: tokens.textSize.small, fontWeight: "600", marginTop: tokens.space[1] },
-  info: { color: tokens.color.muted, fontSize: tokens.textSize.small, fontWeight: "600", marginTop: tokens.space[1] },
-  passwordToggle: {
-    alignSelf: "flex-end",
-    marginTop: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+  err: {
+    color: tokens.color.negative,
+    fontSize: tokens.textSize.small,
+    fontWeight: "600",
+    marginTop: tokens.space[1],
+  },
+  info: {
+    color: tokens.color.muted,
+    fontSize: tokens.textSize.small,
+    fontWeight: "600",
+    marginTop: tokens.space[1],
   },
   passwordTogglePressed: { opacity: 0.8 },
-  passwordToggleText: { color: tokens.color.accent, fontSize: tokens.textSize.caption, fontWeight: "600" },
   btn: {
     marginTop: tokens.space[2],
     backgroundColor: tokens.color.accent,
@@ -282,14 +321,4 @@ const styles = StyleSheet.create({
   },
   btnPressed: { opacity: 0.9 },
   btnText: { color: tokens.color.onAccent, fontWeight: "600", fontSize: tokens.textSize.body },
-  googleBtn: {
-    backgroundColor: tokens.color.panel,
-    borderRadius: tokens.radius.md,
-    paddingVertical: 16,
-    alignItems: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: tokens.color.borderStrong,
-  },
-  googlePressed: { backgroundColor: tokens.color.panelMuted },
-  googleBtnText: { color: tokens.color.text, fontWeight: "600", fontSize: tokens.textSize.body },
 });

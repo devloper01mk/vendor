@@ -12,9 +12,9 @@ export const CardContainer = React.memo(function CardContainer({ children, style
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     padding: tokens.space[2],
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     ...tokens.shadow.card,

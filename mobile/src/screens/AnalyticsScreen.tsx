@@ -1,6 +1,10 @@
+import { AppIcon, type AppIconName } from "@/components/ui/AppIcon";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InsightBars, type InsightBarDatum } from "@/components/ui/InsightBars";
 import { ListItem } from "@/components/ui/ListItem";
+import { ScaledAmountText } from "@/components/ui/ScaledAmountText";
+import { ScreenChrome } from "@/components/ui/ScreenChrome";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { createApi } from "@/data/api/client";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
@@ -8,9 +12,7 @@ import { tokens } from "@/theme/tokens";
 import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, View } from "react-native";
-import { Pressable } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 type Summary = {
   totals: { paid: string; pending: string; committed: string };
@@ -53,7 +55,6 @@ function getRangeQuery(filter: RangeFilter, customFrom: string, customTo: string
 export function AnalyticsScreen() {
   const token = useAuthStore((s) => s.token);
   const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
-  const insets = useSafeAreaInsets();
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>("ALL");
@@ -72,18 +73,45 @@ export function AnalyticsScreen() {
       displayValue: s.paid,
     }));
   }, [data]);
+
   const quickStats = useMemo(
     () => [
-      { key: "users", label: "Items", value: String(data?.highlighted?.length ?? 0), icon: "◌" },
-      { key: "vendors", label: "Sites", value: String(data?.siteSpend?.length ?? 0), icon: "⌂" },
-      { key: "tx", label: "Pending", value: data?.totals.pending ?? "0", icon: "▤" },
-      { key: "spend", label: "Committed", value: data?.totals.committed ?? "0", icon: "◎" },
+      {
+        key: "users",
+        label: "Items",
+        value: String(data?.highlighted?.length ?? 0),
+        icon: "cube-outline" as AppIconName,
+        currency: false,
+      },
+      {
+        key: "vendors",
+        label: "Sites",
+        value: String(data?.siteSpend?.length ?? 0),
+        icon: "location-outline" as AppIconName,
+        currency: false,
+      },
+      {
+        key: "tx",
+        label: "Pending",
+        value: data?.totals.pending ?? "0",
+        icon: "time-outline" as AppIconName,
+        currency: true,
+      },
+      {
+        key: "spend",
+        label: "Committed",
+        value: data?.totals.committed ?? "0",
+        icon: "wallet-outline" as AppIconName,
+        currency: true,
+      },
     ],
     [data],
   );
+
   const paidN = Number(data?.totals.paid ?? 0);
   const committedN = Number(data?.totals.committed ?? 0);
   const pendingN = Number(data?.totals.pending ?? 0);
+  const walletBalanceN = Number(data?.memberWallet?.balance ?? 0);
   const paidPct = committedN > 0 ? Math.min(99.9, (paidN / committedN) * 100) : 0;
   const pendingPct = committedN > 0 ? Math.min(99.9, (pendingN / committedN) * 100) : 0;
   const rangeLabel =
@@ -97,22 +125,27 @@ export function AnalyticsScreen() {
             ? "This month"
             : "Custom";
 
+  const listContentStyle = useMemo(
+    () => [styles.list, styles.listContent],
+    [],
+  );
+
   useFocusEffect(
     useCallback(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const api = createApi(() => token);
-        const range = getRangeQuery(rangeFilter, customFrom, customTo);
-        const d = await api.get<Summary>("/dashboard/summary", range);
-        if (!cancelled) setData(d);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      let cancelled = false;
+      (async () => {
+        try {
+          const api = createApi(() => token);
+          const range = getRangeQuery(rangeFilter, customFrom, customTo);
+          const d = await api.get<Summary>("/dashboard/summary", range);
+          if (!cancelled) setData(d);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }, [token, rangeFilter, customFrom, customTo]),
   );
 
@@ -126,30 +159,12 @@ export function AnalyticsScreen() {
 
   return (
     <View style={styles.screenWrap}>
-      <View
-        style={[
-          styles.screenHeader,
-          { paddingTop: Math.max(insets.top, tokens.space[2]) },
-        ]}
-      >
-        <View style={styles.topRow}>
-          <Pressable style={styles.topIconBtn}>
-            <Text style={styles.topIcon}>☰</Text>
-          </Pressable>
-          <Text style={styles.topTitle}>Dashboard</Text>
-          <View style={styles.topRight}>
-            <Pressable style={styles.topIconBtn}>
-              <Text style={styles.topIcon}>◌</Text>
-            </Pressable>
-            <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-              <Text style={styles.avatarText}>AS</Text>
-            </Pressable>
-          </View>
-        </View>
+      <ScreenChrome title="Dashboard" onSettingsPress={() => navigation.navigate("Settings")}>
         <View style={styles.dropdownWrap}>
           <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-            <Text style={styles.dropdownText}>⌁ {rangeLabel}</Text>
-            <Text style={styles.dropdownIcon}>▾</Text>
+            <AppIcon name="funnel-outline" size={14} color={tokens.color.muted} />
+            <Text style={styles.dropdownText}>{rangeLabel}</Text>
+            <AppIcon name="chevron-down" size={13} color={tokens.color.muted} />
           </Pressable>
           {filterOpen ? (
             <View style={styles.dropdownMenu}>
@@ -224,112 +239,167 @@ export function AnalyticsScreen() {
             }}
           />
         ) : null}
-      </View>
+      </ScreenChrome>
+
       <FlatList
         style={styles.dashboardList}
-        contentContainerStyle={[styles.list, styles.listContent]}
+        contentContainerStyle={listContentStyle}
         data={data?.siteSpend ?? []}
         keyExtractor={(i) => i.siteId}
         ListHeaderComponent={
           <View style={styles.headerBlock}>
-          <CardContainer style={styles.hero}>
-            <View style={styles.heroHeadRow}>
-              <View style={styles.heroLeadingIcon}>
-                <Text style={styles.heroLeadingIconText}>◍</Text>
-              </View>
-              <View style={styles.heroTrend}>
-                <Text style={styles.heroTrendText}>↗ {paidPct.toFixed(1)}%</Text>
-              </View>
-            </View>
-            <Text style={styles.heroLabel}>Total paid</Text>
-            <Text style={styles.heroValue}>{data?.totals.paid ?? "—"}</Text>
-            <View style={styles.heroGrid}>
-              <View style={styles.heroCell}>
-                <Text style={styles.heroCellLabel}>Pending</Text>
-                <Text style={styles.heroCellValueWarn}>{data?.totals.pending ?? "—"}</Text>
-              </View>
-              <View style={styles.heroDivider} />
-              <View style={styles.heroCell}>
-                <Text style={styles.heroCellLabel}>Committed</Text>
-                <Text style={styles.heroCellValue}>{data?.totals.committed ?? "—"}</Text>
-              </View>
-            </View>
-          </CardContainer>
-
-          {data?.memberWallet ? (
             <CardContainer style={styles.hero}>
               <View style={styles.heroHeadRow}>
                 <View style={styles.heroLeadingIcon}>
-                  <Text style={styles.heroLeadingIconText}>↓</Text>
+                  <AppIcon name="wallet-outline" size={16} color={tokens.color.accent} />
                 </View>
                 <View style={styles.heroTrend}>
-                  <Text style={styles.heroTrendText}>↗ {pendingPct.toFixed(1)}%</Text>
+                  <Text style={styles.heroTrendText}>↗ {paidPct.toFixed(1)}%</Text>
                 </View>
               </View>
-              <Text style={styles.heroLabel}>Received from admin</Text>
-              <Text style={styles.heroValue}>{data.memberWallet.received}</Text>
+              <View style={styles.heroAmountRow}>
+                <Text style={styles.heroLabel}>Total paid</Text>
+                <ScaledAmountText
+                  baseSize={24}
+                  align="right"
+                  containerStyle={styles.heroValueContainer}
+                  style={styles.heroValue}
+                >
+                  {data?.totals.paid ?? "—"}
+                </ScaledAmountText>
+              </View>
               <View style={styles.heroGrid}>
                 <View style={styles.heroCell}>
-                  <Text style={styles.heroCellLabel}>Spent to vendors</Text>
-                  <Text style={styles.heroCellValue}>{data.memberWallet.spent}</Text>
+                  <Text style={styles.heroCellLabel}>Pending</Text>
+                  <ScaledAmountText
+                    baseSize={24}
+                    containerStyle={styles.heroCellValueContainer}
+                    style={styles.heroCellValueWarn}
+                  >
+                    {data?.totals.pending ?? "—"}
+                  </ScaledAmountText>
                 </View>
                 <View style={styles.heroDivider} />
                 <View style={styles.heroCell}>
-                  <Text style={styles.heroCellLabel}>Available balance</Text>
-                  <Text style={styles.heroCellValueWarn}>{data.memberWallet.balance}</Text>
+                  <Text style={styles.heroCellLabel}>Committed</Text>
+                  <ScaledAmountText
+                    baseSize={24}
+                    containerStyle={styles.heroCellValueContainer}
+                    style={styles.heroCellValue}
+                  >
+                    {data?.totals.committed ?? "—"}
+                  </ScaledAmountText>
                 </View>
               </View>
             </CardContainer>
-          ) : null}
 
-          <CardContainer style={styles.insightCard}>
-            <View style={styles.sectionHeadRow}>
-              <Text style={styles.sectionTitle}>Spend by site</Text>
-              <Pressable style={styles.viewAllBtn}>
-                <Text style={styles.viewAllText}>View All</Text>
-              </Pressable>
-            </View>
-            <InsightBars data={chartData} emptyLabel="No paid spend in this period yet" />
-          </CardContainer>
+            {data?.memberWallet ? (
+              <CardContainer style={styles.hero}>
+                <View style={styles.heroHeadRow}>
+                  <View style={styles.heroLeadingIcon}>
+                    <AppIcon name="arrow-down-outline" size={16} color={tokens.color.positive} />
+                  </View>
+                  <View style={styles.heroTrend}>
+                    <Text style={styles.heroTrendText}>↗ {pendingPct.toFixed(1)}%</Text>
+                  </View>
+                </View>
+                <View style={styles.heroAmountRow}>
+                  <Text style={styles.heroLabel}>Received from admin</Text>
+                  <ScaledAmountText
+                    baseSize={24}
+                    align="right"
+                    containerStyle={styles.heroValueContainer}
+                    style={styles.heroValue}
+                  >
+                    {data.memberWallet.received}
+                  </ScaledAmountText>
+                </View>
+                <View style={styles.heroGrid}>
+                  <View style={styles.heroCell}>
+                    <Text style={styles.heroCellLabel}>Spent to vendors</Text>
+                    <ScaledAmountText
+                      baseSize={24}
+                      containerStyle={styles.heroCellValueContainer}
+                      style={styles.heroCellValue}
+                    >
+                      {data.memberWallet.spent}
+                    </ScaledAmountText>
+                  </View>
+                  <View style={styles.heroDivider} />
+                  <View style={styles.heroCell}>
+                    <Text style={styles.heroCellLabel}>Available balance</Text>
+                    <ScaledAmountText
+                      baseSize={24}
+                      containerStyle={styles.heroCellValueContainer}
+                      style={walletBalanceN < 0 ? styles.heroCellValueWarn : styles.heroCellValue}
+                      sign={walletBalanceN < 0 ? "-" : ""}
+                    >
+                      {data.memberWallet.balance}
+                    </ScaledAmountText>
+                  </View>
+                </View>
+              </CardContainer>
+            ) : null}
 
-          <CardContainer style={styles.highlightCard}>
-            <Text style={styles.sectionTitle}>Needs attention</Text>
-            <Text style={styles.sectionHint}>Flagged or highlighted line items</Text>
-            {(data?.highlighted ?? []).length ? (
-              <View style={styles.highlightList}>
-                {(data?.highlighted ?? []).map((h) => (
-                  <View key={h.requirementId} style={styles.highlightRow}>
-                    <Text style={styles.highlightBullet}>●</Text>
-                    <View style={styles.highlightTextWrap}>
-                      <Text style={styles.highlightTitle}>{h.itemName}</Text>
-                      <Text style={styles.highlightMeta}>
-                        {h.vendorName} · {h.siteName}
-                      </Text>
+            <CardContainer style={styles.insightCard}>
+              <SectionLabel>Spend by site</SectionLabel>
+              <InsightBars
+                data={chartData}
+                emptyLabel="No paid spend in this period yet"
+                onPressItem={(siteId) => navigation.navigate("SiteDetails", { id: siteId })}
+              />
+            </CardContainer>
+
+            <CardContainer style={styles.highlightCard}>
+              <SectionLabel>Needs attention</SectionLabel>
+              <Text style={styles.sectionHint}>Flagged or highlighted line items</Text>
+              {(data?.highlighted ?? []).length ? (
+                <View style={styles.highlightList}>
+                  {(data?.highlighted ?? []).map((h) => (
+                    <Pressable
+                      key={h.requirementId}
+                      style={({ pressed }) => [styles.highlightRow, pressed && styles.pressed]}
+                      onPress={() => navigation.navigate("Payment", { id: h.requirementId })}
+                    >
+                      <Text style={styles.highlightBullet}>●</Text>
+                      <View style={styles.highlightTextWrap}>
+                        <Text style={styles.highlightTitle}>{h.itemName}</Text>
+                        <Text style={styles.highlightMeta}>
+                          {h.vendorName} · {h.siteName}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyInline}>You are all caught up — nothing highlighted.</Text>
+              )}
+            </CardContainer>
+
+            <CardContainer style={styles.quickCard}>
+              <View style={styles.quickGrid}>
+                {quickStats.map((stat) => (
+                  <View key={stat.key} style={styles.quickTile}>
+                    <View style={styles.quickIconWrap}>
+                      <AppIcon name={stat.icon} size={14} color={tokens.color.muted} />
                     </View>
+                    <Text style={styles.quickLabel}>{stat.label}</Text>
+                    <ScaledAmountText
+                      baseSize={18}
+                      minimumFontScale={0.45}
+                      currency={stat.currency}
+                      containerStyle={styles.quickValueContainer}
+                      style={styles.quickValue}
+                    >
+                      {stat.value}
+                    </ScaledAmountText>
                   </View>
                 ))}
               </View>
-            ) : (
-              <Text style={styles.emptyInline}>You are all caught up — nothing highlighted.</Text>
-            )}
-          </CardContainer>
+            </CardContainer>
 
-          <CardContainer style={styles.quickCard}>
-            <View style={styles.quickGrid}>
-              {quickStats.map((stat) => (
-                <View key={stat.key} style={styles.quickTile}>
-                  <View style={styles.quickIconWrap}>
-                    <Text style={styles.quickIcon}>{stat.icon}</Text>
-                  </View>
-                  <Text style={styles.quickLabel}>{stat.label}</Text>
-                  <Text style={styles.quickValue}>{stat.value}</Text>
-                </View>
-              ))}
-            </View>
-          </CardContainer>
-
-          <Text style={styles.listSectionTitle}>Paid by site</Text>
-        </View>
+            <SectionLabel>Paid by site</SectionLabel>
+          </View>
         }
         renderItem={({ item }) => (
           <ListItem
@@ -337,11 +407,13 @@ export function AnalyticsScreen() {
             subtitle="Total paid in selected period"
             amountLabel={item.paid}
             amountTone="positive"
-            onPress={() => {}}
-            leadingGlyph="◎"
-            showChevron={false}
+            onPress={() => navigation.navigate("SiteDetails", { id: item.siteId })}
+            leadingGlyph={item.name.trim().charAt(0).toUpperCase()}
+            showChevron
+            variant="card"
           />
         )}
+        ItemSeparatorComponent={() => <View style={styles.cardGap} />}
         ListEmptyComponent={<Text style={styles.empty}>No analytics data</Text>}
       />
     </View>
@@ -351,135 +423,91 @@ export function AnalyticsScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", backgroundColor: tokens.color.background },
   screenWrap: { flex: 1, backgroundColor: tokens.color.background },
-  screenHeader: {
-    paddingHorizontal: tokens.space[2],
-    backgroundColor: tokens.color.background,
-    gap: tokens.space[2],
-    zIndex: 10,
-  },
   dashboardList: { flex: 1 },
   list: {
     paddingHorizontal: tokens.space[2],
     paddingBottom: tokens.space[5],
-    gap: tokens.space[2],
     backgroundColor: tokens.color.background,
   },
   listContent: { flexGrow: 1 },
-  headerBlock: { gap: tokens.space[2], marginBottom: tokens.space[1] },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  topIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topIcon: { fontSize: 16, color: tokens.color.text },
-  topTitle: { flex: 1, marginLeft: 8, fontSize: 18, color: tokens.color.text, fontWeight: "600" },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#EDE4D6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
-  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  kicker: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "700",
-    color: tokens.color.accent,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  screenTitle: {
-    fontSize: tokens.textSize.hero,
-    fontWeight: "700",
-    color: tokens.color.text,
-    letterSpacing: -0.6,
-    lineHeight: 34,
-  },
-  screenSub: {
-    marginTop: 4,
-    fontSize: tokens.textSize.small,
-    color: tokens.color.muted,
-    fontWeight: "500",
-  },
+  cardGap: { height: tokens.space[1] },
+  headerBlock: { gap: tokens.space[2], marginBottom: tokens.space[1], paddingTop: tokens.space[1] },
   hero: {
     padding: tokens.space[2],
     gap: tokens.space[1],
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: tokens.color.panel,
   },
   heroHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   heroLeadingIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F4EFE7",
+    borderRadius: tokens.radius.sm,
+    backgroundColor: tokens.color.accentMuted,
     alignItems: "center",
     justifyContent: "center",
   },
-  heroLeadingIconText: { fontSize: 14, color: "#7F725A", fontWeight: "700" },
   heroTrend: {
     borderRadius: tokens.radius.pill,
-    backgroundColor: "#ECF6F0",
+    backgroundColor: tokens.color.positiveMuted,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  heroTrendText: { fontSize: 12, color: "#2E7E59", fontWeight: "600" },
+  heroTrendText: { fontSize: 12, color: tokens.color.positive, fontWeight: "600" },
   heroLabel: {
+    flexShrink: 1,
+    maxWidth: "38%",
     fontSize: tokens.textSize.caption,
     fontWeight: "600",
     color: tokens.color.muted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
+  heroAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.space[1],
+    width: "100%",
+  },
+  heroValueContainer: {
+    flex: 1,
+    minWidth: 100,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
   heroValue: {
-    fontSize: 34,
-    fontWeight: "700",
     color: tokens.color.positive,
-    letterSpacing: -0.8,
-    fontVariant: ["tabular-nums"],
+    letterSpacing: -0.5,
+    width: "100%",
   },
   heroGrid: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginTop: tokens.space[1],
     paddingTop: tokens.space[2],
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: tokens.color.border,
   },
-  heroCell: { flex: 1, gap: 4 },
-  heroDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch", backgroundColor: tokens.color.border, marginHorizontal: tokens.space[2] },
+  heroCell: { flex: 1, gap: 6, minWidth: 0, alignItems: "flex-start" },
+  heroDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: tokens.color.border,
+    marginHorizontal: tokens.space[2],
+  },
   heroCellLabel: { fontSize: tokens.textSize.caption, color: tokens.color.muted, fontWeight: "500" },
-  heroCellValue: { fontSize: 24, fontWeight: "700", color: tokens.color.text, fontVariant: ["tabular-nums"] },
-  heroCellValueWarn: { fontSize: 24, fontWeight: "700", color: tokens.color.negative, fontVariant: ["tabular-nums"] },
-  insightCard: { paddingVertical: tokens.space[3] },
-  sectionHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.space[2] },
-  viewAllBtn: {
-    borderRadius: tokens.radius.pill,
-    borderWidth: 1,
-    borderColor: tokens.color.border,
-    backgroundColor: tokens.color.panelMuted,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  heroCellValueContainer: {
+    width: "100%",
+    alignItems: "flex-start",
   },
-  viewAllText: { fontSize: 12, color: tokens.color.text, fontWeight: "600" },
+  heroCellValue: { color: tokens.color.text },
+  heroCellValueWarn: { color: tokens.color.negative },
+  insightCard: { paddingVertical: tokens.space[2], gap: tokens.space[1] },
   highlightCard: { gap: tokens.space[1] },
-  sectionTitle: {
-    fontSize: tokens.textSize.subtitle,
-    lineHeight: 24,
-    fontWeight: "600",
-    color: tokens.color.text,
-    letterSpacing: -0.2,
-  },
   sectionHint: { fontSize: tokens.textSize.caption, color: tokens.color.muted, marginTop: 2 },
   dropdownWrap: {
-    alignSelf: "flex-end",
+    alignSelf: "flex-start",
     width: 176,
     position: "relative",
     zIndex: 20,
@@ -487,37 +515,36 @@ const styles = StyleSheet.create({
   dropdownBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
-    borderRadius: tokens.radius.xl,
+    borderRadius: tokens.radius.md,
     backgroundColor: tokens.color.panel,
     paddingHorizontal: tokens.space[2],
     paddingVertical: 10,
   },
-  dropdownText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
-  dropdownIcon: { color: tokens.color.muted, fontSize: 14 },
+  dropdownText: { flex: 1, color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   dropdownMenu: {
     position: "absolute",
     top: 44,
     left: 0,
     right: 0,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
     backgroundColor: tokens.color.panel,
     overflow: "hidden",
     zIndex: 30,
-    elevation: 4,
+    ...tokens.shadow.card,
   },
   dropdownItem: { paddingHorizontal: tokens.space[2], paddingVertical: 10 },
   dropdownItemText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
-  dropdownItemTextOn: { color: tokens.color.accent },
+  dropdownItemTextOn: { color: tokens.color.ink, fontWeight: "700" },
   pressed: { opacity: 0.88 },
   customRow: { flexDirection: "row", gap: tokens.space[1] },
   dateBtn: {
     flex: 1,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
     backgroundColor: tokens.color.panel,
@@ -531,28 +558,21 @@ const styles = StyleSheet.create({
   highlightTextWrap: { flex: 1, gap: 2 },
   highlightTitle: { fontSize: tokens.textSize.body, fontWeight: "600", color: tokens.color.text },
   highlightMeta: { fontSize: tokens.textSize.caption, color: tokens.color.muted },
-  listSectionTitle: {
-    fontSize: tokens.textSize.subtitle,
-    fontWeight: "600",
-    color: tokens.color.text,
-    marginTop: tokens.space[1],
-    letterSpacing: -0.2,
-  },
   emptyInline: { fontSize: tokens.textSize.small, color: tokens.color.muted, marginTop: tokens.space[1] },
   empty: { textAlign: "center", color: tokens.color.muted, marginTop: tokens.space[4], fontSize: tokens.textSize.small },
   quickCard: { paddingVertical: tokens.space[2] },
   quickGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: tokens.space[2] },
-  quickTile: { width: "25%", alignItems: "center", paddingHorizontal: 4 },
+  quickTile: { width: "50%", alignItems: "flex-start", paddingHorizontal: 8, minWidth: 0 },
   quickIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: tokens.radius.sm,
     backgroundColor: tokens.color.panelMuted,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 6,
   },
-  quickIcon: { color: "#8D7F65", fontSize: 13, fontWeight: "700" },
   quickLabel: { fontSize: 11, color: tokens.color.muted },
-  quickValue: { marginTop: 3, fontSize: 22, lineHeight: 24, color: tokens.color.text, fontWeight: "700" },
+  quickValueContainer: { width: "100%", marginTop: 3 },
+  quickValue: { color: tokens.color.text },
 });

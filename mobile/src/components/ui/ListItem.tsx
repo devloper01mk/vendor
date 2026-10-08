@@ -1,3 +1,4 @@
+import { formatRupee } from "@/core/formatRupee";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { tokens } from "@/theme/tokens";
@@ -13,6 +14,8 @@ type ListItemProps = {
   /** Single character or emoji for the leading tile; defaults to first letter of title */
   leadingGlyph?: string;
   showChevron?: boolean;
+  /** `card` = standalone surface; `grouped` = row inside BlockGroup */
+  variant?: "card" | "grouped";
 };
 
 export const ListItem = React.memo(function ListItem({
@@ -25,6 +28,7 @@ export const ListItem = React.memo(function ListItem({
   onPress,
   leadingGlyph,
   showChevron = true,
+  variant = "card",
 }: ListItemProps) {
   const glyph = leadingGlyph?.trim() || title.trim().charAt(0).toUpperCase() || "•";
 
@@ -39,7 +43,12 @@ export const ListItem = React.memo(function ListItem({
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, isSelected && styles.selected, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        variant === "grouped" ? styles.rowGrouped : styles.rowCard,
+        isSelected && styles.selected,
+        pressed && styles.pressed,
+      ]}
       onPress={onPress}
     >
       <View style={styles.leading}>
@@ -56,7 +65,7 @@ export const ListItem = React.memo(function ListItem({
         </Text>
       </View>
       <View style={styles.right}>
-        {amountLabel ? <Text style={[styles.amount, amountStyle]}>{amountLabel}</Text> : null}
+        {amountLabel ? <Text style={[styles.amount, amountStyle]}>{formatRupee(amountLabel)}</Text> : null}
         <View style={styles.rightActions}>
           {rightSlot}
           {showChevron ? <Text style={styles.chevron}>›</Text> : null}
@@ -68,29 +77,32 @@ export const ListItem = React.memo(function ListItem({
 
 const styles = StyleSheet.create({
   row: {
-    borderRadius: tokens.radius.lg,
-    borderWidth: 1,
-    borderColor: tokens.color.border,
-    backgroundColor: tokens.color.panel,
     padding: tokens.space[2],
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space[1],
+  },
+  rowCard: {
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+    backgroundColor: tokens.color.panel,
     ...tokens.shadow.card,
   },
+  rowGrouped: {
+    backgroundColor: tokens.color.panel,
+  },
   pressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.995 }],
+    backgroundColor: tokens.color.blockHover,
   },
   selected: {
-    borderColor: "#D2C1A2",
-    backgroundColor: tokens.color.accentMuted,
+    backgroundColor: tokens.color.blockSelected,
   },
   leading: { justifyContent: "center" },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: tokens.radius.lg,
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radius.sm,
     backgroundColor: tokens.color.accentMuted,
     alignItems: "center",
     justifyContent: "center",

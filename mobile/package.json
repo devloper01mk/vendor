@@ -1,6 +1,6 @@
 {
   "name": "vendor-expense-mobile",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "android": "node ./scripts/run-from-package.js react-native run-android --no-packager",

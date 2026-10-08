@@ -3,14 +3,17 @@ import { config } from "@/core/config";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { tokens } from "@/theme/tokens";
 import DocumentPicker from "react-native-document-picker";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -22,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Opt = { id: string; name: string };
 type InvoiceFile = { uri: string; type: string; name: string };
+type AddRoute = RouteProp<AuthedStackParamList, "AddEntry">;
 
 function numberOnly(s: string) {
   return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
@@ -29,13 +33,15 @@ function numberOnly(s: string) {
 
 export function AddEntryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AuthedStackParamList>>();
+  const route = useRoute<AddRoute>();
+  const prefills = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
 
   const [vendors, setVendors] = useState<Opt[]>([]);
   const [sites, setSites] = useState<Opt[]>([]);
-  const [vendorId, setVendorId] = useState("");
-  const [siteId, setSiteId] = useState("");
+  const [vendorId, setVendorId] = useState(prefills?.vendorId ?? "");
+  const [siteId, setSiteId] = useState(prefills?.siteId ?? "");
   const [itemName, setItemName] = useState("");
   const [brand, setBrand] = useState("");
   const [total, setTotal] = useState("");
@@ -56,7 +62,9 @@ export function AddEntryScreen() {
   const [siteName, setSiteName] = useState("");
   const [siteCode, setSiteCode] = useState("");
   const [siteAddress, setSiteAddress] = useState("");
-  const [errors, setErrors] = useState<{ item?: string; total?: string }>({});
+  const [errors, setErrors] = useState<{ item?: string; total?: string; vendor?: string; site?: string }>({});
+  const lockVendor = Boolean(prefills?.vendorId);
+  const lockSite = Boolean(prefills?.siteId);
 
   useEffect(() => {
     let c = false;
@@ -69,30 +77,77 @@ export function AddEntryScreen() {
       if (!c) {
         setVendors(v.map((x) => ({ id: x.id, name: x.name })));
         setSites(s.map((x) => ({ id: x.id, name: x.name })));
-        if (v[0]) setVendorId(v[0].id);
-        if (s[0]) setSiteId(s[0].id);
+        // Prefill from drill-down; otherwise leave empty so user picks explicitly
+        if (prefills?.vendorId) setVendorId(prefills.vendorId);
+        if (prefills?.siteId) setSiteId(prefills.siteId);
       }
     })();
     return () => {
       c = true;
     };
-  }, [token]);
+  }, [token, prefills?.vendorId, prefills?.siteId]);
 
   async function pickInvoice() {
-    try {
-      const file = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
-      });
-      if (!file.uri) return;
-      setInvoiceFile({
-        uri: file.uri,
-        type: file.type || "application/octet-stream",
-        name: file.name || "invoice",
-      });
-    } catch (error) {
-      if (DocumentPicker.isCancel(error)) return;
-      setStatus("Failed to select invoice file");
-    }
+    Alert.alert("Attach bill", "Choose source", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const res = await launchCamera({ mediaType: "photo", cameraType: "back", quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open camera");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Gallery",
+        onPress: async () => {
+          const res = await launchImageLibrary({ mediaType: "photo", selectionLimit: 1, quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open gallery");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Document",
+        onPress: async () => {
+          try {
+            const file = await DocumentPicker.pickSingle({
+              type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+            });
+            if (!file.uri) return;
+            setInvoiceFile({
+              uri: file.uri,
+              type: file.type || "application/octet-stream",
+              name: file.name || "invoice",
+            });
+          } catch (error) {
+            if (DocumentPicker.isCancel(error)) return;
+            setStatus("Failed to select invoice file");
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   async function uploadInvoice(requirementId: string) {
@@ -121,7 +176,9 @@ export function AddEntryScreen() {
   }
 
   function validate(): boolean {
-    const next: { item?: string; total?: string } = {};
+    const next: { item?: string; total?: string; vendor?: string; site?: string } = {};
+    if (!vendorId) next.vendor = "Select a brand/person";
+    if (!siteId) next.site = "Select a site";
     if (!itemName.trim()) next.item = "Enter a short description of the purchase.";
     const n = Number(total);
     if (!total.trim() || !Number.isFinite(n) || n <= 0) next.total = "Enter a valid total greater than zero.";
@@ -233,37 +290,42 @@ export function AddEntryScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.screenTitle}>Add Transaction</Text>
+      {prefills?.siteName || prefills?.vendorName ? (
+        <Text style={styles.prefillHint}>
+          {[prefills.siteName, prefills.vendorName].filter(Boolean).join(" › ")}
+        </Text>
+      ) : null}
 
       <CardContainer style={styles.card}>
-        <Text style={styles.cardTitle}>Type</Text>
-        <Field label="Brand/Person">
-          <View style={styles.vendorRow}>
-            <View style={styles.vendorPickerWrap}>
-              <PickerLike options={vendors} value={vendorId} onChange={setVendorId} />
-            </View>
-            <Pressable
-              style={({ pressed }) => [styles.addCircleBtn, pressed && styles.pressed]}
-              onPress={() => setVendorSheetOpen(true)}
-              hitSlop={8}
-            >
-              <Text style={styles.addCircleBtnText}>+</Text>
-            </Pressable>
-          </View>
-        </Field>
-        <Field label="From / To">
-          <View style={styles.vendorRow}>
-            <View style={styles.vendorPickerWrap}>
-              <PickerLike options={sites} value={siteId} onChange={setSiteId} />
-            </View>
-            <Pressable
-              style={({ pressed }) => [styles.addCircleBtn, pressed && styles.pressed]}
-              onPress={() => setSiteSheetOpen(true)}
-              hitSlop={8}
-            >
-              <Text style={styles.addCircleBtnText}>+</Text>
-            </Pressable>
-          </View>
-        </Field>
+        <Text style={styles.cardTitle}>Where</Text>
+        <SearchableSelect
+          label="Brand/Person"
+          options={vendors}
+          value={vendorId}
+          placeholder="Select brand/person"
+          searchPlaceholder="Search brand/person..."
+          disabled={lockVendor}
+          error={errors.vendor}
+          onChange={(id) => {
+            setVendorId(id);
+            if (errors.vendor) setErrors((e) => ({ ...e, vendor: undefined }));
+          }}
+          onAddPress={lockVendor ? undefined : () => setVendorSheetOpen(true)}
+        />
+        <SearchableSelect
+          label="Site"
+          options={sites}
+          value={siteId}
+          placeholder="Select site"
+          searchPlaceholder="Search site..."
+          disabled={lockSite}
+          error={errors.site}
+          onChange={(id) => {
+            setSiteId(id);
+            if (errors.site) setErrors((e) => ({ ...e, site: undefined }));
+          }}
+          onAddPress={lockSite ? undefined : () => setSiteSheetOpen(true)}
+        />
       </CardContainer>
 
       <CardContainer style={styles.card}>
@@ -349,7 +411,7 @@ export function AddEntryScreen() {
           <>
             <Text style={styles.cardHint}>Attach a PDF or photo for your records.</Text>
             <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={pickInvoice}>
-              <Text style={styles.chipText}>{invoiceFile ? "Replace file" : "Choose PDF or image"}</Text>
+              <Text style={styles.chipText}>{invoiceFile ? "Replace bill" : "Take / upload bill"}</Text>
             </Pressable>
             {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
           </>
@@ -403,53 +465,11 @@ export function AddEntryScreen() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function PickerLike({
-  options,
-  value,
-  onChange,
-}: {
-  options: Opt[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <View style={styles.pickerRow}>
-      {options.map((o) => (
-        <Pressable
-          key={o.id}
-          onPress={() => onChange(o.id)}
-          style={({ pressed }) => [styles.chip, value === o.id && styles.chipOn, pressed && styles.chipPressed]}
-        >
-          <Text style={[styles.chipText, value === o.id && styles.chipTextOn]} numberOfLines={1}>
-            {o.name}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: tokens.space[2],
     gap: tokens.space[2],
     backgroundColor: tokens.color.background,
-  },
-  kicker: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "700",
-    color: tokens.color.accent,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
   },
   screenTitle: {
     fontSize: tokens.textSize.hero,
@@ -458,39 +478,20 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     lineHeight: 34,
   },
-  screenSub: { fontSize: tokens.textSize.small, color: tokens.color.muted, fontWeight: "500", marginBottom: tokens.space[1] },
-  card: { gap: tokens.space[1] },
+  prefillHint: {
+    fontSize: tokens.textSize.small,
+    fontWeight: "600",
+    color: tokens.color.muted,
+    marginTop: -8,
+  },
+  card: { gap: tokens.space[2] },
   cardTitle: {
     fontSize: tokens.textSize.subtitle,
     fontWeight: "600",
     color: tokens.color.text,
-    marginBottom: tokens.space[1],
     letterSpacing: -0.2,
   },
   cardHint: { fontSize: tokens.textSize.caption, color: tokens.color.muted, marginTop: -4, marginBottom: tokens.space[1] },
-  fieldBlock: { marginBottom: tokens.space[2] },
-  fieldLabel: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "600",
-    color: tokens.color.muted,
-    marginBottom: tokens.space[1],
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
-  },
-  vendorRow: { flexDirection: "row", alignItems: "flex-start", gap: tokens.space[1] },
-  vendorPickerWrap: { flex: 1 },
-  addCircleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: tokens.radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: tokens.color.border,
-    backgroundColor: tokens.color.panelMuted,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addCircleBtnText: { fontSize: 22, lineHeight: 24, color: tokens.color.accent, fontWeight: "600" },
-  pressed: { opacity: 0.85 },
   pickerRow: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space[1] },
   chip: {
     paddingHorizontal: tokens.space[2],

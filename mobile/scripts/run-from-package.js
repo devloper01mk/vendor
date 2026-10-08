@@ -11,20 +11,35 @@ if (!command) {
   process.exit(1);
 }
 
+function syncDevApiHost() {
+  const isAndroidCli = command.includes('react-native');
+  const isRunAndroid = isAndroidCli && args.includes('run-android');
+  const isMetroStart = isAndroidCli && args.includes('start');
+  if (!isRunAndroid && !isMetroStart) return;
+  spawnSync('node', [path.join(__dirname, 'sync-dev-api-host.js')], {
+    cwd: packageRoot,
+    stdio: 'inherit',
+  });
+}
+
 function ensureAdbReverse() {
-  const isRunAndroid = command.includes('react-native') && args.includes('run-android');
-  if (!isRunAndroid) return;
+  const isAndroidCli = command.includes('react-native');
+  const isRunAndroid = isAndroidCli && args.includes('run-android');
+  const isMetroStart = isAndroidCli && args.includes('start');
+  if (!isRunAndroid && !isMetroStart) return;
   const reverse = (port) =>
     spawnSync('adb', ['reverse', `tcp:${port}`, `tcp:${port}`], {
       cwd: packageRoot,
       stdio: 'ignore',
       shell: process.platform === 'win32',
     });
-  // Keep Metro and local backend reachable from physical devices.
   reverse(8081);
   reverse(4000);
+  reverse(4001);
+  reverse(3000);
 }
 
+syncDevApiHost();
 ensureAdbReverse();
 
 const child = spawn(command, args, {

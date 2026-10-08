@@ -1,16 +1,18 @@
+import { AppIcon } from "@/components/ui/AppIcon";
 import { createApi } from "@/data/api/client";
+import { formatRupee } from "@/core/formatRupee";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { ScreenChrome } from "@/components/ui/ScreenChrome";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
 import { useFocusEffect, useNavigation, type NavigationProp } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { memo, useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 
 type Vendor = {
   id: string;
@@ -18,6 +20,7 @@ type Vendor = {
   phone?: string | null;
   alternatePhone?: string | null;
   gstNumber?: string | null;
+  createdAt?: string;
   totals: { pending: string; paid: string };
 };
 type RangeFilter = "ALL" | "TODAY" | "WEEK" | "MONTH" | "CUSTOM";
@@ -52,9 +55,44 @@ function getRangeQuery(filter: RangeFilter, customFrom: string, customTo: string
   return { from, to: end };
 }
 
+type VendorRowProps = {
+  item: Vendor;
+  onOpen: (vendor: Vendor) => void;
+  onEdit: (vendor: Vendor) => void;
+};
+
+const VendorRow = memo(function VendorRow({ item, onOpen, onEdit }: VendorRowProps) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.vendorCard, pressed && styles.vendorCardPressed]}
+      onPress={() => onOpen(item)}
+    >
+      <View style={styles.vendorMiddle}>
+        <Text style={styles.vendorName} numberOfLines={2}>
+          {item.name}
+        </Text>
+        <Text style={styles.vendorSub} numberOfLines={1}>
+          {item.gstNumber?.trim() || "No GST"}
+        </Text>
+        <Text style={styles.vendorSub} numberOfLines={1}>
+          {item.phone?.trim() || "—"}
+        </Text>
+        <Text style={styles.vendorMeta}>Total spend</Text>
+        <Text style={styles.vendorSpendValue}>{formatRupee(item.totals.paid)}</Text>
+      </View>
+      <View style={styles.vendorRight}>
+        <Text style={styles.vendorMeta}>Pending</Text>
+        <Text style={styles.vendorPendingValue}>{formatRupee(item.totals.pending)}</Text>
+        <Pressable style={styles.editBtn} onPress={() => onEdit(item)} hitSlop={8}>
+          <AppIcon name="create-outline" size={16} color={tokens.color.muted} />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+});
+
 export function VendorsScreen() {
   const token = useAuthStore((s) => s.token);
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
   const [rows, setRows] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,6 +112,7 @@ export function VendorsScreen() {
   const [customTo, setCustomTo] = useState("");
   const [pickerField, setPickerField] = useState<"from" | "to" | null>(null);
   const [pickerDate, setPickerDate] = useState(new Date());
+  const [search, setSearch] = useState("");
   const rangeLabel =
     rangeFilter === "ALL"
       ? "All"
@@ -84,6 +123,26 @@ export function VendorsScreen() {
           : rangeFilter === "MONTH"
             ? "This month"
             : "Custom";
+
+  const listContentStyle = useMemo(() => [styles.list, styles.listContent], []);
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = rows;
+    if (q) {
+      list = rows.filter(
+        (v) =>
+          v.name.toLowerCase().includes(q) ||
+          (v.gstNumber ?? "").toLowerCase().includes(q) ||
+          (v.phone ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list.slice().sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+  }, [rows, search]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -164,6 +223,17 @@ export function VendorsScreen() {
     setSheetOpen(true);
   }
 
+  const renderItem = useCallback(
+    ({ item }: { item: Vendor }) => (
+      <VendorRow
+        item={item}
+        onOpen={(vendor) => navigation.navigate("VendorDetails", { id: vendor.id })}
+        onEdit={openEditSheet}
+      />
+    ),
+    [navigation],
+  );
+
   async function onPickLogo() {
     Alert.alert("Upload Logo", "Choose image source", [
       {
@@ -208,131 +278,114 @@ export function VendorsScreen() {
     ]);
   }
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  const listEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.listLoader}>
+          <ActivityIndicator color={tokens.color.accent} />
+        </View>
+      );
+    }
+    return <Text style={styles.empty}>{listError ? "Unable to load vendors" : search.trim() ? "No vendors match your search" : "No vendors"}</Text>;
+  }, [loading, listError, search]);
 
   return (
     <View style={styles.screen}>
-      <View
-        style={[
-          styles.screenHeader,
-          { paddingTop: Math.max(insets.top, tokens.space[2]) },
-        ]}
-      >
-        <View style={styles.headerWrap}>
-          <View style={styles.topRow}>
-            <Pressable style={styles.topIconBtn}>
-              <Text style={styles.topIcon}>☰</Text>
-            </Pressable>
-            <Text style={styles.topTitle}>Vendors</Text>
-            <View style={styles.topRight}>
-              <Pressable style={styles.topIconBtn}>
-                <Text style={styles.topIcon}>◌</Text>
-              </Pressable>
-              <Pressable style={styles.avatar} onPress={() => navigation.navigate("Settings")}>
-                <Text style={styles.avatarText}>AS</Text>
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.searchRow}>
-            <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
-              <Text style={styles.searchText}>Search vendors...</Text>
-            </View>
-            <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
-              <Text style={styles.addInlineBtnText}>+ Add Vendor</Text>
-            </Pressable>
-          </View>
-          <View style={styles.dropdownWrap}>
-            <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
-              <Text style={styles.dropdownText}>{rangeLabel}</Text>
-              <Text style={styles.dropdownIcon}>▾</Text>
-            </Pressable>
-          </View>
-          {rangeFilter === "CUSTOM" ? (
-            <View style={styles.customRow}>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customFrom ? new Date(customFrom) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("from");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.dateBtn}
-                onPress={() => {
-                  const existing = customTo ? new Date(customTo) : new Date();
-                  setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
-                  setPickerField("to");
-                }}
-              >
-                <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          {pickerField ? (
-            <DateTimePicker
-              value={pickerDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={(event, selectedDate) => {
-                if (event.type === "dismissed") {
-                  setPickerField(null);
-                  return;
-                }
-                if (selectedDate) {
-                  const formatted = formatYmd(selectedDate);
-                  if (pickerField === "from") setCustomFrom(formatted);
-                  else setCustomTo(formatted);
-                }
-                setPickerField(null);
-              }}
+      <ScreenChrome title="Vendors" onSettingsPress={() => navigation.navigate("Settings")}>
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <AppIcon name="search-outline" size={15} color={tokens.color.muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search vendors..."
+              placeholderTextColor={tokens.color.placeholder}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
             />
-          ) : null}
-          {listError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{listError}</Text>
-              <Pressable style={styles.retryBtn} onPress={() => void loadData()}>
-                <Text style={styles.retryBtnText}>Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          </View>
+          <Pressable style={styles.addInlineBtn} onPress={openAddSheet}>
+            <Text style={styles.addInlineBtnText}>+ Add</Text>
+          </Pressable>
         </View>
-      </View>
+        <View style={styles.dropdownWrap}>
+          <Pressable style={styles.dropdownBtn} onPress={() => setFilterOpen((v) => !v)}>
+            <Text style={styles.dropdownText}>{rangeLabel}</Text>
+            <AppIcon name="chevron-down" size={13} color={tokens.color.muted} />
+          </Pressable>
+        </View>
+        {rangeFilter === "CUSTOM" ? (
+          <View style={styles.customRow}>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customFrom ? new Date(customFrom) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("from");
+              }}
+            >
+              <Text style={styles.dateBtnText}>{customFrom || "From date"}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => {
+                const existing = customTo ? new Date(customTo) : new Date();
+                setPickerDate(Number.isNaN(existing.getTime()) ? new Date() : existing);
+                setPickerField("to");
+              }}
+            >
+              <Text style={styles.dateBtnText}>{customTo || "To date"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {pickerField ? (
+          <DateTimePicker
+            value={pickerDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(event, selectedDate) => {
+              if (event.type === "dismissed") {
+                setPickerField(null);
+                return;
+              }
+              if (selectedDate) {
+                const formatted = formatYmd(selectedDate);
+                if (pickerField === "from") setCustomFrom(formatted);
+                else setCustomTo(formatted);
+              }
+              setPickerField(null);
+            }}
+          />
+        ) : null}
+        {listError ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{listError}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => void loadData()}>
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </ScreenChrome>
+
       <FlatList
         removeClippedSubviews={false}
         style={styles.vendorList}
-        contentContainerStyle={[styles.list, styles.listContent]}
-        data={rows}
+        contentContainerStyle={listContentStyle}
+        data={filteredRows}
         keyExtractor={(i) => i.id}
-        renderItem={({ item, index }) => (
-          <Pressable style={styles.vendorCard} onPress={() => navigation.navigate("VendorDetails", { id: item.id })}>
-            <View style={styles.vendorIconWrap}>
-              <Text style={styles.vendorIcon}>{["◨", "◧", "◩", "◪"][index % 4]}</Text>
-            </View>
-            <View style={styles.vendorMiddle}>
-              <Text style={styles.vendorName}>{item.name}</Text>
-              <Text style={styles.vendorSub}>{item.gstNumber ?? "No GST"}</Text>
-              <Text style={styles.vendorSub}>{item.phone ?? "-"}</Text>
-            </View>
-            <View style={styles.vendorRight}>
-              <Text style={styles.vendorSpendLabel}>Total Spend</Text>
-              <Text style={styles.vendorSpendValue}>₹ {item.totals.paid}</Text>
-              <Pressable style={styles.editBtn} onPress={() => openEditSheet(item)} hitSlop={8}>
-                <Text style={styles.editIcon}>✎</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        )}
-        ListEmptyComponent={<Text style={styles.empty}>{listError ? "Unable to load vendors" : "No vendors"}</Text>}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && rows.length > 0}
+            onRefresh={() => void loadData()}
+            colors={[tokens.color.accent]}
+            tintColor={tokens.color.accent}
+          />
+        }
+        ItemSeparatorComponent={() => <View style={styles.cardGap} />}
+        ListEmptyComponent={listEmpty}
       />
 
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
@@ -405,63 +458,56 @@ export function VendorsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: tokens.color.background },
-  center: { flex: 1, justifyContent: "center" },
-  screenHeader: { paddingHorizontal: 16, backgroundColor: tokens.color.background },
   vendorList: { flex: 1 },
+  listLoader: {
+    minHeight: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: tokens.space[5],
+  },
   list: {
-    paddingHorizontal: 16,
+    paddingHorizontal: tokens.space[2],
     paddingBottom: 96,
-    gap: 12,
     backgroundColor: tokens.color.background,
   },
   listContent: { flexGrow: 1 },
-  form: {},
+  cardGap: { height: tokens.space[1] },
   formTitle: { fontSize: 17, lineHeight: 24, fontWeight: "600", color: tokens.color.text, marginBottom: 8 },
   meta: { fontSize: 13, color: tokens.color.muted },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  topIconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  topIcon: { fontSize: 16, color: tokens.color.text },
-  topTitle: { flex: 1, marginLeft: 8, fontSize: tokens.textSize.title, color: tokens.color.text, fontWeight: "600" },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDE4D6", alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 12, color: "#5F5342", fontWeight: "600" },
   searchRow: { flexDirection: "row", alignItems: "center", gap: tokens.space[1] },
   searchBox: {
     flex: 1,
     height: 42,
-    borderRadius: tokens.radius.lg,
-    borderWidth: 1,
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     backgroundColor: tokens.color.panel,
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     paddingHorizontal: 12,
   },
-  searchIcon: { color: tokens.color.muted, marginRight: 8 },
-  searchText: { color: "#A0927B", fontSize: 12 },
+  searchInput: { flex: 1, color: tokens.color.text, fontSize: 12, paddingVertical: 0 },
   addInlineBtn: {
     height: 42,
-    borderRadius: tokens.radius.lg,
-    backgroundColor: tokens.color.accent,
-    paddingHorizontal: 12,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.sidebar,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  addInlineBtnText: { fontSize: 12, color: tokens.color.onAccent, fontWeight: "600" },
-  positive: { fontSize: 13, color: tokens.color.positive, fontWeight: "600" },
-  rightWrap: { alignItems: "flex-end", gap: 8 },
+  addInlineBtnText: { fontSize: 12, color: tokens.color.sidebarText, fontWeight: "600" },
   editBtn: {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: tokens.radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: tokens.color.panelMuted,
+    backgroundColor: tokens.color.blockHover,
   },
-  editIcon: { fontSize: 14, color: tokens.color.text },
-  empty: { textAlign: "center", color: tokens.color.muted, marginTop: 40 },
+  empty: { textAlign: "center", color: tokens.color.muted, marginTop: tokens.space[4], fontSize: tokens.textSize.small },
   errorBanner: {
     borderRadius: tokens.radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -473,7 +519,7 @@ const styles = StyleSheet.create({
   },
   headerWrap: { gap: tokens.space[1] },
   dropdownWrap: {
-    alignSelf: "flex-end",
+    alignSelf: "flex-start",
     width: 170,
     position: "relative",
     zIndex: 20,
@@ -482,6 +528,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 6,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.color.border,
     borderRadius: tokens.radius.md,
@@ -489,8 +536,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.space[2],
     paddingVertical: 10,
   },
-  dropdownText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
-  dropdownIcon: { color: tokens.color.muted, fontSize: 14 },
+  dropdownText: { flex: 1, color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   dropdownOverlay: {
     flex: 1,
     justifyContent: "flex-start",
@@ -543,32 +589,29 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   vendorCard: {
-    borderWidth: 1,
-    borderColor: tokens.color.border,
-    borderRadius: tokens.radius.lg,
-    backgroundColor: tokens.color.panel,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    backgroundColor: tokens.color.panel,
+    borderRadius: tokens.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+    ...tokens.shadow.card,
   },
-  vendorIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#F4EFE7",
-    alignItems: "center",
-    justifyContent: "center",
+  vendorCardPressed: {
+    backgroundColor: tokens.color.blockHover,
   },
-  vendorIcon: { fontSize: 13, color: "#7F725A", fontWeight: "700" },
-  vendorMiddle: { flex: 1 },
-  vendorName: { fontSize: 14, fontWeight: "600", color: tokens.color.text },
-  vendorSub: { marginTop: 2, fontSize: 11, color: tokens.color.muted },
+  vendorMiddle: { flex: 1, minWidth: 0 },
+  vendorName: { fontSize: tokens.textSize.body, fontWeight: "600", color: tokens.color.text },
+  vendorSub: { marginTop: 2, fontSize: tokens.textSize.caption, color: tokens.color.muted },
   vendorRight: { alignItems: "flex-end", gap: 4 },
-  vendorSpendLabel: { fontSize: 10, color: tokens.color.muted },
-  vendorSpendValue: { fontSize: 16, color: tokens.color.text, fontWeight: "700" },
+  vendorMeta: { fontSize: 10, color: tokens.color.muted, textTransform: "uppercase", letterSpacing: 0.4 },
+  vendorSpendValue: { marginTop: 2, fontSize: 17, color: tokens.color.text, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  vendorPendingValue: { fontSize: 17, color: tokens.color.negative, fontWeight: "700", fontVariant: ["tabular-nums"] },
   sheetOverlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: tokens.color.overlay },
   sheet: {
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,

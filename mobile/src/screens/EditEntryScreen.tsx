@@ -3,14 +3,26 @@ import { config } from "@/core/config";
 import { CardContainer } from "@/components/ui/CardContainer";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { useAuthStore } from "@/features/auth/store";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { tokens } from "@/theme/tokens";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import DocumentPicker from "react-native-document-picker";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Opt = { id: string; name: string };
@@ -64,7 +76,18 @@ export function EditEntryScreen() {
   const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [errors, setErrors] = useState<{ item?: string; total?: string }>({});
+  const [errors, setErrors] = useState<{ item?: string; total?: string; vendor?: string; site?: string }>({});
+  const [vendorSheetOpen, setVendorSheetOpen] = useState(false);
+  const [vendorBusy, setVendorBusy] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const [vendorPhone, setVendorPhone] = useState("");
+  const [vendorAltPhone, setVendorAltPhone] = useState("");
+  const [vendorGst, setVendorGst] = useState("");
+  const [siteSheetOpen, setSiteSheetOpen] = useState(false);
+  const [siteBusy, setSiteBusy] = useState(false);
+  const [siteName, setSiteName] = useState("");
+  const [siteCode, setSiteCode] = useState("");
+  const [siteAddress, setSiteAddress] = useState("");
 
   const canEdit = useMemo(() => (me?.id && ownerId ? me.id === ownerId : false), [me?.id, ownerId]);
 
@@ -104,19 +127,117 @@ export function EditEntryScreen() {
   }, [id, token]);
 
   async function pickInvoice() {
+    Alert.alert("Attach bill", "Choose source", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const res = await launchCamera({ mediaType: "photo", cameraType: "back", quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open camera");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Gallery",
+        onPress: async () => {
+          const res = await launchImageLibrary({ mediaType: "photo", selectionLimit: 1, quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setStatus("Could not open gallery");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Document",
+        onPress: async () => {
+          try {
+            const file = await DocumentPicker.pickSingle({
+              type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+            });
+            if (!file.uri) return;
+            setInvoiceFile({
+              uri: file.uri,
+              type: file.type || "application/octet-stream",
+              name: file.name || "invoice",
+            });
+          } catch (error) {
+            if (DocumentPicker.isCancel(error)) return;
+            setStatus("Failed to select invoice file");
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
+  async function addVendorFromSheet() {
+    if (!vendorName.trim()) return;
+    setVendorBusy(true);
+    setStatus(null);
     try {
-      const file = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+      const api = createApi(() => token);
+      const created = await api.post<{ id: string; name: string }>("/vendors", {
+        name: vendorName.trim(),
+        phone: vendorPhone || undefined,
+        alternatePhone: vendorAltPhone || undefined,
+        gstNumber: vendorGst || undefined,
       });
-      if (!file.uri) return;
-      setInvoiceFile({
-        uri: file.uri,
-        type: file.type || "application/octet-stream",
-        name: file.name || "invoice",
+      const list = await api.get<{ id: string; name: string }[]>("/vendors");
+      setVendors(list.map((x) => ({ id: x.id, name: x.name })));
+      setVendorId(created.id);
+      setVendorName("");
+      setVendorPhone("");
+      setVendorAltPhone("");
+      setVendorGst("");
+      setVendorSheetOpen(false);
+    } catch {
+      setStatus("Failed to add brand/person");
+    } finally {
+      setVendorBusy(false);
+    }
+  }
+
+  async function addSiteFromSheet() {
+    if (!siteName.trim()) return;
+    setSiteBusy(true);
+    setStatus(null);
+    try {
+      const api = createApi(() => token);
+      const created = await api.post<{ id: string; name: string }>("/sites", {
+        name: siteName.trim(),
+        code: siteCode || undefined,
+        address: siteAddress || undefined,
       });
-    } catch (error) {
-      if (DocumentPicker.isCancel(error)) return;
-      setStatus("Failed to select invoice file");
+      const list = await api.get<{ id: string; name: string }[]>("/sites");
+      setSites(list.map((x) => ({ id: x.id, name: x.name })));
+      setSiteId(created.id);
+      setSiteName("");
+      setSiteCode("");
+      setSiteAddress("");
+      setSiteSheetOpen(false);
+    } catch {
+      setStatus("Failed to add site");
+    } finally {
+      setSiteBusy(false);
     }
   }
 
@@ -143,7 +264,9 @@ export function EditEntryScreen() {
   }
 
   function validate(): boolean {
-    const next: { item?: string; total?: string } = {};
+    const next: { item?: string; total?: string; vendor?: string; site?: string } = {};
+    if (!vendorId) next.vendor = "Select a brand/person";
+    if (!siteId) next.site = "Select a site";
     if (!itemName.trim()) next.item = "Item description is required.";
     const n = Number(total);
     if (!total.trim() || !Number.isFinite(n) || n <= 0) next.total = "Enter a valid total.";
@@ -223,12 +346,34 @@ export function EditEntryScreen() {
 
       <CardContainer style={styles.card}>
         <Text style={styles.cardTitle}>Parties</Text>
-        <Field label="Brand/Person">
-          <PickerLike options={vendors} value={vendorId} onChange={setVendorId} disabled={!canEdit} />
-        </Field>
-        <Field label="Site">
-          <PickerLike options={sites} value={siteId} onChange={setSiteId} disabled={!canEdit} />
-        </Field>
+        <SearchableSelect
+          label="Brand/Person"
+          options={vendors}
+          value={vendorId}
+          placeholder="Select brand/person"
+          searchPlaceholder="Search brand/person..."
+          disabled={!canEdit}
+          error={errors.vendor}
+          onChange={(id) => {
+            setVendorId(id);
+            if (errors.vendor) setErrors((e) => ({ ...e, vendor: undefined }));
+          }}
+          onAddPress={canEdit ? () => setVendorSheetOpen(true) : undefined}
+        />
+        <SearchableSelect
+          label="Site"
+          options={sites}
+          value={siteId}
+          placeholder="Select site"
+          searchPlaceholder="Search site..."
+          disabled={!canEdit}
+          error={errors.site}
+          onChange={(id) => {
+            setSiteId(id);
+            if (errors.site) setErrors((e) => ({ ...e, site: undefined }));
+          }}
+          onAddPress={canEdit ? () => setSiteSheetOpen(true) : undefined}
+        />
       </CardContainer>
 
       <CardContainer style={styles.card}>
@@ -323,50 +468,45 @@ export function EditEntryScreen() {
       {status ? <Text style={styles.status}>{status}</Text> : null}
 
       <PrimaryButton title="Save changes" onPress={save} disabled={busy || !canEdit} loading={busy} />
+
+      <Modal visible={vendorSheetOpen} animationType="slide" transparent onRequestClose={() => setVendorSheetOpen(false)}>
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.backdrop} onPress={() => setVendorSheetOpen(false)} />
+          <CardContainer style={styles.sheetCard}>
+            <Text style={styles.sheetTitle}>New brand/person</Text>
+            <InputField label="Name" placeholder="Name" value={vendorName} onChangeText={setVendorName} />
+            <InputField label="Phone" placeholder="Primary phone" value={vendorPhone} onChangeText={setVendorPhone} keyboardType="phone-pad" />
+            <InputField
+              label="Alternate phone"
+              placeholder="Optional"
+              value={vendorAltPhone}
+              onChangeText={setVendorAltPhone}
+              keyboardType="phone-pad"
+            />
+            <InputField label="GST number" placeholder="Optional" value={vendorGst} onChangeText={setVendorGst} />
+            <PrimaryButton
+              title="Add"
+              onPress={addVendorFromSheet}
+              disabled={vendorBusy || !vendorName.trim()}
+              loading={vendorBusy}
+            />
+          </CardContainer>
+        </View>
+      </Modal>
+
+      <Modal visible={siteSheetOpen} animationType="slide" transparent onRequestClose={() => setSiteSheetOpen(false)}>
+        <View style={styles.sheetOverlay}>
+          <Pressable style={styles.backdrop} onPress={() => setSiteSheetOpen(false)} />
+          <CardContainer style={styles.sheetCard}>
+            <Text style={styles.sheetTitle}>New site</Text>
+            <InputField label="Site name" placeholder="Name" value={siteName} onChangeText={setSiteName} />
+            <InputField label="Code" placeholder="Optional site code" value={siteCode} onChangeText={setSiteCode} />
+            <InputField label="Address" placeholder="Optional" value={siteAddress} onChangeText={setSiteAddress} />
+            <PrimaryButton title="Add site" onPress={addSiteFromSheet} disabled={siteBusy || !siteName.trim()} loading={siteBusy} />
+          </CardContainer>
+        </View>
+      </Modal>
     </ScrollView>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.fieldBlock}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function PickerLike({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
-  options: Opt[];
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <View style={styles.pickerRow}>
-      {options.map((o) => (
-        <Pressable
-          key={o.id}
-          disabled={disabled}
-          onPress={() => onChange(o.id)}
-          style={({ pressed }) => [
-            styles.chip,
-            value === o.id && styles.chipOn,
-            pressed && !disabled && styles.chipPressed,
-            disabled && styles.chipDisabled,
-          ]}
-        >
-          <Text style={[styles.chipText, value === o.id && styles.chipTextOn]} numberOfLines={1}>
-            {o.name}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
   );
 }
 
@@ -395,22 +535,12 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { color: tokens.color.negative, fontWeight: "700", fontSize: tokens.textSize.small },
   bannerMsg: { color: tokens.color.muted, fontSize: tokens.textSize.caption, lineHeight: 18 },
-  card: { gap: tokens.space[1] },
+  card: { gap: tokens.space[2] },
   cardTitle: {
     fontSize: tokens.textSize.subtitle,
     fontWeight: "600",
     color: tokens.color.text,
-    marginBottom: tokens.space[1],
     letterSpacing: -0.2,
-  },
-  fieldBlock: { marginBottom: tokens.space[2] },
-  fieldLabel: {
-    fontSize: tokens.textSize.caption,
-    fontWeight: "600",
-    color: tokens.color.muted,
-    marginBottom: tokens.space[1],
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
   },
   pickerRow: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space[1] },
   chip: {
@@ -423,7 +553,6 @@ const styles = StyleSheet.create({
   },
   chipOn: { backgroundColor: tokens.color.accentMuted, borderColor: tokens.color.accent },
   chipPressed: { opacity: 0.9 },
-  chipDisabled: { opacity: 0.45 },
   chipText: { fontSize: tokens.textSize.small, color: tokens.color.text, fontWeight: "500" },
   chipTextOn: { color: tokens.color.accent, fontWeight: "700" },
   amountRow: { flexDirection: "row", gap: tokens.space[2] },
@@ -444,4 +573,21 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.88 },
   inputNote: { minHeight: 96, textAlignVertical: "top" },
   status: { textAlign: "center", fontSize: tokens.textSize.small, color: tokens.color.negative, fontWeight: "600" },
+  sheetOverlay: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: tokens.color.overlay },
+  sheetCard: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingBottom: tokens.space[4],
+    maxHeight: "88%",
+    gap: 0,
+  },
+  sheetTitle: {
+    fontSize: tokens.textSize.subtitle,
+    lineHeight: 24,
+    fontWeight: "600",
+    color: tokens.color.text,
+    marginBottom: tokens.space[2],
+    letterSpacing: -0.2,
+  },
 });

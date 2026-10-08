@@ -1,15 +1,20 @@
 import { createApi } from "@/data/api/client";
-import { config } from "@/core/config";
+import { formatRupee, formatRupeeWithSign } from "@/core/formatRupee";
+import { resolveFileUrl } from "@/core/resolveFileUrl";
 import { CardContainer } from "@/components/ui/CardContainer";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { InputField } from "@/components/ui/InputField";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { Snackbar } from "@/components/ui/Snackbar";
 import type { AuthedStackParamList } from "@/navigation/types";
 import { useAuthStore } from "@/features/auth/store";
 import { tokens } from "@/theme/tokens";
-import { useRoute, type RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, type NavigationProp, type RouteProp } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import DocumentPicker from "react-native-document-picker";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+import Ionicons from "@react-native-vector-icons/ionicons";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Detail = {
@@ -54,8 +59,14 @@ function formatEntryDate(iso: string) {
   }
 }
 
+async function openInvoice(fileUrl: string) {
+  const url = resolveFileUrl(fileUrl);
+  await Linking.openURL(url);
+}
+
 export function PaymentScreen() {
   const { params } = useRoute<PaymentRoute>();
+  const navigation = useNavigation<NavigationProp<AuthedStackParamList>>();
   const id = params.id;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
@@ -68,6 +79,7 @@ export function PaymentScreen() {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("ALL");
   const [billStatus, setBillStatus] = useState<"yes" | "no">("no");
   const [invoiceFile, setInvoiceFile] = useState<InvoiceFile | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function numberOnly(s: string) {
     return s.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
@@ -104,45 +116,35 @@ export function PaymentScreen() {
       setErr("Enter valid payment amount");
       return;
     }
+    const due = Number(row.remaining) || 0;
+    if (amount > due + 0.001) {
+      setErr(`Amount exceeds Due (${formatRupee(row.remaining)})`);
+      return;
+    }
     setSaving(true);
     setErr(null);
+    setConfirmOpen(false);
     try {
       const api = createApi(() => token);
-      await api.post(`/requirements/${id}/payments`, { amount, note: paymentNote.trim() || undefined });
-      await api.patch(`/requirements/${id}`, { billStatus });
+      await api.post(`/requirements/${id}/payments`, {
+        amount,
+        note: paymentNote.trim() || undefined,
+        billStatus,
+      });
 
       if (billStatus === "yes" && invoiceFile) {
         if (!token) throw new Error("Not signed in");
         const formData = new FormData();
-        formData.append(
-          "file",
-          {
-            uri: invoiceFile.uri,
-            type: invoiceFile.type,
-            name: invoiceFile.name,
-          } as unknown as Blob,
-        );
-
-        const res = await fetch(`${config.apiUrl}/requirements/${id}/invoice`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "x-client-platform": "mobile",
-            Accept: "application/json",
-          },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          throw new Error("Invoice upload failed");
-        }
+        const filePayload = {
+          uri: invoiceFile.uri,
+          type: invoiceFile.type,
+          name: invoiceFile.name,
+        };
+        formData.append("file", filePayload as unknown as Blob);
+        await api.postForm(`/requirements/${id}/invoice`, formData);
       }
 
-      await load();
-      setPaymentAmount("");
-      setPaymentNote("");
-      setBillStatus("no");
-      setInvoiceFile(null);
+      navigation.goBack();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to add payment");
     } finally {
@@ -150,21 +152,82 @@ export function PaymentScreen() {
     }
   }
 
-  async function pickInvoice() {
-    try {
-      const file = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
-      });
-      if (!file.uri) return;
-      setInvoiceFile({
-        uri: file.uri,
-        type: file.type || "application/octet-stream",
-        name: file.name || "invoice",
-      });
-    } catch (e) {
-      if (DocumentPicker.isCancel(e)) return;
-      setErr("Failed to select invoice file");
+  function requestSavePayment() {
+    if (!row) return;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setErr("Enter valid payment amount");
+      return;
     }
+    const due = Number(row.remaining) || 0;
+    if (amount > due + 0.001) {
+      setErr(`Amount exceeds Due (${formatRupee(row.remaining)})`);
+      return;
+    }
+    setConfirmOpen(true);
+  }
+
+  async function pickInvoice() {
+    Alert.alert("Attach bill", "Choose source", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const res = await launchCamera({ mediaType: "photo", cameraType: "back", quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setErr("Could not open camera");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Gallery",
+        onPress: async () => {
+          const res = await launchImageLibrary({ mediaType: "photo", selectionLimit: 1, quality: 0.8 });
+          if (res.didCancel) return;
+          if (res.errorCode) {
+            setErr("Could not open gallery");
+            return;
+          }
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            setInvoiceFile({
+              uri: asset.uri,
+              type: asset.type || "image/jpeg",
+              name: asset.fileName || "bill.jpg",
+            });
+          }
+        },
+      },
+      {
+        text: "Document",
+        onPress: async () => {
+          try {
+            const file = await DocumentPicker.pickSingle({
+              type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+            });
+            if (!file.uri) return;
+            setInvoiceFile({
+              uri: file.uri,
+              type: file.type || "application/octet-stream",
+              name: file.name || "invoice",
+            });
+          } catch (e) {
+            if (DocumentPicker.isCancel(e)) return;
+            setErr("Failed to select invoice file");
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   function isInSelectedDateRange(paidAt: string) {
@@ -193,7 +256,7 @@ export function PaymentScreen() {
     .slice()
     .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
 
-  if (loading || !row) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={tokens.color.accent} />
@@ -201,14 +264,43 @@ export function PaymentScreen() {
     );
   }
 
+  if (!row) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.hint}>{err || "Could not load payment"}</Text>
+        <Pressable
+          style={styles.retryBtn}
+          onPress={() => {
+            setLoading(true);
+            void load()
+              .catch((e) => setErr(e instanceof Error ? e.message : "Could not load"))
+              .finally(() => setLoading(false));
+          }}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.wrap,
-        { paddingTop: tokens.space[2], paddingBottom: insets.bottom + tokens.space[4] },
-      ]}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={styles.screen}>
+      <Snackbar message={err} onDismiss={() => setErr(null)} />
+      <ConfirmDialog
+        visible={confirmOpen}
+        title="Confirm payment"
+        message={`Pay ${formatRupee(paymentAmount)} against Due ${formatRupee(row.remaining)}?`}
+        confirmLabel="Pay now"
+        onConfirm={() => void addPayment()}
+        onCancel={() => setConfirmOpen(false)}
+      />
+      <ScrollView
+        contentContainerStyle={[
+          styles.wrap,
+          { paddingTop: tokens.space[2], paddingBottom: insets.bottom + tokens.space[4] },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
       <Text style={styles.kicker}>Payment</Text>
       <Text style={styles.screenTitle} numberOfLines={2}>
         {row.itemName}
@@ -217,15 +309,15 @@ export function PaymentScreen() {
       <View style={styles.kpiRow}>
         <CardContainer style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Total</Text>
-          <Text style={styles.kpiValue}>{row.totalAmount}</Text>
+          <Text style={styles.kpiValue}>{formatRupee(row.totalAmount)}</Text>
         </CardContainer>
         <CardContainer style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Paid</Text>
-          <Text style={[styles.kpiValue, styles.success]}>{row.paidTotal}</Text>
+          <Text style={[styles.kpiValue, styles.success]}>{formatRupee(row.paidTotal)}</Text>
         </CardContainer>
         <CardContainer style={styles.kpiCard}>
           <Text style={styles.kpiLabel}>Due</Text>
-          <Text style={[styles.kpiValue, styles.negative]}>{row.remaining}</Text>
+          <Text style={[styles.kpiValue, styles.negative]}>{formatRupee(row.remaining)}</Text>
         </CardContainer>
       </View>
 
@@ -250,7 +342,7 @@ export function PaymentScreen() {
           </View>
         ) : null}
         {row.notes?.trim() ? (
-          <View style={styles.detailRow}>
+          <View style={styles.detailRowMultiline}>
             <Text style={styles.detailLabel}>Notes</Text>
             <Text style={styles.detailValueMultiline}>{row.notes.trim()}</Text>
           </View>
@@ -260,8 +352,15 @@ export function PaymentScreen() {
       {row.invoice ? (
         <CardContainer style={styles.block}>
           <Text style={styles.sectionTitle}>Invoice</Text>
-          <Pressable style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]} onPress={() => Linking.openURL(row.invoice!.fileUrl)}>
-            <Text style={styles.linkBtnText}>Open {row.invoice.originalName}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.invoiceAction, pressed && styles.pressed]}
+            onPress={() => openInvoice(row.invoice!.fileUrl).catch(() => setErr("Could not open invoice"))}
+          >
+            <Ionicons name="document-text-outline" size={18} color={tokens.color.accent} />
+            <Text style={styles.invoiceActionText} numberOfLines={1}>
+              View {row.invoice.originalName}
+            </Text>
+            <Ionicons name="open-outline" size={16} color={tokens.color.accent} />
           </Pressable>
         </CardContainer>
       ) : (
@@ -307,12 +406,12 @@ export function PaymentScreen() {
               onPress={pickInvoice}
               disabled={saving}
             >
-              <Text style={styles.linkBtnText}>{invoiceFile ? "Replace invoice" : "Upload invoice (optional)"}</Text>
+              <Text style={styles.linkBtnText}>{invoiceFile ? "Replace bill" : "Take / upload bill"}</Text>
             </Pressable>
             {invoiceFile ? <Text style={styles.fileName}>Selected: {invoiceFile.name}</Text> : null}
           </View>
         ) : null}
-        <PrimaryButton title="Save payment" onPress={addPayment} disabled={saving} loading={saving} />
+        <PrimaryButton title="Save payment" onPress={requestSavePayment} disabled={saving} loading={saving} />
       </CardContainer>
 
       <CardContainer style={styles.block}>
@@ -363,25 +462,53 @@ export function PaymentScreen() {
           filteredPayments.map((p) => (
               <View key={p.id} style={styles.payRow}>
                 <View style={styles.payTop}>
-                  <Text style={styles.payAmt}>+ {p.amount}</Text>
+                  <Text style={styles.payAmt}>{formatRupeeWithSign(p.amount, "+")}</Text>
                   <Text style={styles.payDate}>{new Date(p.paidAt).toLocaleDateString()}</Text>
                 </View>
                 <Text style={styles.payTime}>{new Date(p.paidAt).toLocaleTimeString()}</Text>
                 {p.note ? <Text style={styles.payNote}>{p.note}</Text> : null}
+                {row.invoice && p.id === filteredPayments[0]?.id ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.invoiceAction, styles.invoiceActionInline, pressed && styles.pressed]}
+                    onPress={() => openInvoice(row.invoice!.fileUrl).catch(() => setErr("Could not open invoice"))}
+                  >
+                    <Ionicons name="document-text-outline" size={16} color={tokens.color.accent} />
+                    <Text style={styles.invoiceActionText} numberOfLines={1}>
+                      View invoice · {row.invoice.originalName}
+                    </Text>
+                    <Ionicons name="download-outline" size={16} color={tokens.color.accent} />
+                  </Pressable>
+                ) : null}
               </View>
             ))
         ) : (
           <Text style={styles.hint}>No payments found for selected date range.</Text>
         )}
       </CardContainer>
-
-      {err ? <Text style={styles.err}>{err}</Text> : null}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: "center", backgroundColor: tokens.color.background },
+  screen: { flex: 1, backgroundColor: tokens.color.background },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: tokens.space[2],
+    padding: tokens.space[3],
+    backgroundColor: tokens.color.background,
+  },
+  retryBtn: {
+    borderRadius: tokens.radius.md,
+    paddingHorizontal: tokens.space[2],
+    paddingVertical: 8,
+    backgroundColor: tokens.color.panel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.border,
+  },
+  retryText: { color: tokens.color.text, fontSize: tokens.textSize.caption, fontWeight: "600" },
   wrap: {
     paddingHorizontal: tokens.space[2],
     gap: tokens.space[2],
@@ -430,21 +557,44 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   sectionHint: { fontSize: tokens.textSize.caption, color: tokens.color.muted, marginTop: -4 },
-  detailRow: { gap: 4 },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: tokens.space[2],
+    paddingVertical: 2,
+  },
+  detailRowMultiline: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: tokens.space[2],
+    paddingVertical: 2,
+  },
   detailLabel: {
+    flexShrink: 0,
+    maxWidth: "42%",
     fontSize: tokens.textSize.caption,
     color: tokens.color.muted,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.3,
   },
-  detailValue: { fontSize: tokens.textSize.small, color: tokens.color.text, fontWeight: "500", lineHeight: 20 },
-  detailValueMultiline: {
+  detailValue: {
+    flex: 1,
+    textAlign: "right",
     fontSize: tokens.textSize.small,
     color: tokens.color.text,
     fontWeight: "500",
     lineHeight: 20,
-    marginTop: 2,
+  },
+  detailValueMultiline: {
+    flex: 1,
+    textAlign: "right",
+    fontSize: tokens.textSize.small,
+    color: tokens.color.text,
+    fontWeight: "500",
+    lineHeight: 20,
   },
   filterRow: {
     flexDirection: "row",
@@ -473,7 +623,6 @@ const styles = StyleSheet.create({
     color: tokens.color.accent,
   },
   hint: { fontSize: tokens.textSize.small, color: tokens.color.muted, lineHeight: 20 },
-  err: { color: tokens.color.negative, fontSize: tokens.textSize.small, fontWeight: "600", textAlign: "center" },
   inputNote: { minHeight: 80, textAlignVertical: "top" },
   payRow: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -489,6 +638,25 @@ const styles = StyleSheet.create({
   payDate: { color: tokens.color.muted, fontSize: tokens.textSize.caption, fontWeight: "600" },
   payTime: { color: tokens.color.muted, fontSize: tokens.textSize.caption },
   payNote: { color: tokens.color.text, fontSize: tokens.textSize.caption },
+  invoiceAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: tokens.space[1],
+    paddingHorizontal: tokens.space[2],
+    paddingVertical: 10,
+    borderRadius: tokens.radius.md,
+    backgroundColor: tokens.color.accentMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.color.accent,
+  },
+  invoiceActionInline: { marginTop: 8 },
+  invoiceActionText: {
+    flex: 1,
+    fontWeight: "600",
+    color: tokens.color.accent,
+    fontSize: tokens.textSize.caption,
+  },
   linkBtn: {
     alignSelf: "flex-start",
     marginTop: tokens.space[1],

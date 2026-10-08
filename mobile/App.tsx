@@ -5,6 +5,7 @@ import { tokens } from "@/theme/tokens";
 import { NavigationContainer, type Theme } from "@react-navigation/native";
 import { useEffect } from "react";
 import { StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 const navTheme: Theme = {
   dark: false,
@@ -36,12 +37,12 @@ function App(): React.JSX.Element {
   }, [token, user, logout]);
 
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
       <NavigationContainer theme={navTheme}>
         {token && user?.role === "MEMBER" ? <AuthedNavigator /> : <LoginScreen />}
       </NavigationContainer>
-    </>
+    </SafeAreaProvider>
   );
 }
 
